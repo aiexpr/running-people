@@ -13,8 +13,7 @@ namespace AdvancedSmartAIMod
     // =========================================================================================================
     /// <summary>
     /// Mod entry point loaded by People Playground upon game initialization.
-    /// Registers the custom "Advanced Smart AI" spawnable entity, sets up global context menu options,
-    /// and initializes the Cross-Mod Compatibility Engine (Human Tiers & Beyond Nowhere).
+    /// Matches the EntryPoint defined in mod.json: "AdvancedSmartAIMod.Mod"
     /// </summary>
     public class Mod
     {
@@ -56,7 +55,7 @@ namespace AdvancedSmartAIMod
                         string tierInfo = newAI.ModdedTierInfo;
                         string msg = string.IsNullOrEmpty(tierInfo)
                             ? "Human converted to Advanced Smart AI!"
-                            : $"Entity converted to Advanced Smart AI! [{tierInfo}]";
+                            : "Entity converted to Advanced Smart AI! [" + tierInfo + "]";
                         ModAPI.Notify(msg);
                     }
                     else
@@ -108,33 +107,39 @@ namespace AdvancedSmartAIMod
         Throwable      // Grenades, rocks, or improvised projectiles
     }
 
+    /// <summary>
+    /// Energy status structure compatible with all .NET and Mono runtimes without System.ValueTuple dependency.
+    /// </summary>
+    public struct EnergyData
+    {
+        public float Current;
+        public float Max;
+
+        public EnergyData(float current, float max)
+        {
+            Current = current;
+            Max = max;
+        }
+    }
+
     // =========================================================================================================
     // CROSS-MOD COMPATIBILITY ENGINE (HUMAN TIERS & BEYOND NOWHERE)
     // =========================================================================================================
-    /// <summary>
-    /// Scans loaded assemblies at runtime and provides deep, zero-dependency reflection adapters
-    /// for the "Human Tiers" / "Human Tiers Reforged" mod and the "Beyond Nowhere" mod.
-    /// Prevents TypeLoadExceptions when those mods are absent, while automatically unlocking
-    /// superpower usage, tier stat scaling, energy management, and ability-weapon handling when present.
-    /// </summary>
     public static class CrossModAdapterEngine
     {
         public static bool IsHumanTiersLoaded { get; private set; }
         public static bool IsBeyondNowhereLoaded { get; private set; }
 
-        // Cached reflection types & members
         private static readonly Dictionary<string, Type> CachedTypes = new Dictionary<string, Type>();
-        private static readonly Dictionary<string, MethodInfo> CachedMethods = new Dictionary<string, MethodInfo>();
-        private static readonly Dictionary<string, PropertyInfo> CachedProperties = new Dictionary<string, PropertyInfo>();
-        private static readonly Dictionary<string, FieldInfo> CachedFields = new Dictionary<string, FieldInfo>();
 
         public static void Initialize()
         {
             try
             {
                 Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                foreach (var asm in assemblies)
+                for (int i = 0; i < assemblies.Length; i++)
                 {
+                    Assembly asm = assemblies[i];
                     string asmName = asm.GetName().Name.ToLower();
                     if (asmName.Contains("humantier") || asmName.Contains("human_tier") || asmName.Contains("htr"))
                     {
@@ -145,11 +150,12 @@ namespace AdvancedSmartAIMod
                         IsBeyondNowhereLoaded = true;
                     }
 
-                    // Index relevant types from assemblies
                     try
                     {
-                        foreach (var t in asm.GetTypes())
+                        Type[] types = asm.GetTypes();
+                        for (int j = 0; j < types.Length; j++)
                         {
+                            Type t = types[j];
                             string typeName = t.Name.ToLower();
                             if (typeName.Contains("tier") || typeName.Contains("power") || typeName.Contains("energy") ||
                                 typeName.Contains("ability") || typeName.Contains("gifted") || typeName.Contains("anomaly") ||
@@ -163,7 +169,7 @@ namespace AdvancedSmartAIMod
                             }
                         }
                     }
-                    catch { /* Ignore types that fail reflection loading in sandboxed assemblies */ }
+                    catch { }
                 }
 
                 if (IsHumanTiersLoaded) Debug.Log("[AdvancedSmartAI] Human Tiers mod detected! Auto-compatibility adapter activated.");
@@ -171,39 +177,36 @@ namespace AdvancedSmartAIMod
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[AdvancedSmartAI] CrossModAdapterEngine scan completed with note: {ex.Message}");
+                Debug.LogWarning("[AdvancedSmartAI] CrossModAdapterEngine scan completed with note: " + ex.Message);
             }
         }
 
-        /// <summary>
-        /// Reads the entity's Tier level (0 to 8 or Special) from Human Tiers / Beyond Nowhere components if present.
-        /// Returns -1 if not a tiered entity.
-        /// </summary>
         public static int DetectEntityTier(GameObject root)
         {
             if (root == null) return -1;
 
             Component[] components = root.GetComponentsInChildren<Component>();
-            foreach (var comp in components)
+            for (int i = 0; i < components.Length; i++)
             {
+                Component comp = components[i];
                 if (comp == null) continue;
                 Type t = comp.GetType();
                 string tName = t.Name.ToLower();
 
                 if (tName.Contains("tier") || tName.Contains("gifted") || tName.Contains("power") || tName.Contains("anomaly"))
                 {
-                    // Check properties
-                    PropertyInfo tierProp = t.GetProperty("Tier", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                         ?? t.GetProperty("TierLevel", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    PropertyInfo tierProp = t.GetProperty("Tier", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (tierProp == null) tierProp = t.GetProperty("TierLevel", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
                     if (tierProp != null && (tierProp.PropertyType == typeof(int) || tierProp.PropertyType.IsEnum))
                     {
                         try { return Convert.ToInt32(tierProp.GetValue(comp, null)); } catch { }
                     }
 
-                    // Check fields
-                    FieldInfo tierField = t.GetField("Tier", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                       ?? t.GetField("TierLevel", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                       ?? t.GetField("tier", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    FieldInfo tierField = t.GetField("Tier", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (tierField == null) tierField = t.GetField("TierLevel", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (tierField == null) tierField = t.GetField("tier", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
                     if (tierField != null && (tierField.FieldType == typeof(int) || tierField.FieldType.IsEnum))
                     {
                         try { return Convert.ToInt32(tierField.GetValue(comp)); } catch { }
@@ -211,13 +214,12 @@ namespace AdvancedSmartAIMod
                 }
             }
 
-            // Name-based fallback (e.g. "[Tier 4] The Tester", "The Shell Phase 2", "Improved Human")
             string objName = root.name.ToLower();
-            for (int i = 8; i >= 1; i--)
+            for (int k = 8; k >= 1; k--)
             {
-                if (objName.Contains($"tier {i}") || objName.Contains($"tier{i}") || objName.Contains($"[tier {i}]") || objName.Contains($"[t{i}]"))
+                if (objName.Contains("tier " + k) || objName.Contains("tier" + k) || objName.Contains("[tier " + k + "]") || objName.Contains("[t" + k + "]"))
                 {
-                    return i;
+                    return k;
                 }
             }
 
@@ -227,51 +229,47 @@ namespace AdvancedSmartAIMod
             return -1;
         }
 
-        /// <summary>
-        /// Reads current energy and max energy from Human Tiers / Beyond Nowhere components.
-        /// Returns (currentEnergy, maxEnergy).
-        /// </summary>
-        public static (float current, float max) GetEnergyStatus(GameObject root)
+        public static EnergyData GetEnergyStatus(GameObject root)
         {
-            if (root == null) return (0f, 0f);
+            if (root == null) return new EnergyData(0f, 0f);
 
             Component[] components = root.GetComponentsInChildren<Component>();
-            foreach (var comp in components)
+            for (int i = 0; i < components.Length; i++)
             {
+                Component comp = components[i];
                 if (comp == null) continue;
                 Type t = comp.GetType();
                 string tName = t.Name.ToLower();
 
                 if (tName.Contains("energy") || tName.Contains("power") || tName.Contains("gifted") || tName.Contains("main"))
                 {
-                    FieldInfo curField = t.GetField("Energy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                      ?? t.GetField("currentEnergy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                      ?? t.GetField("energy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                    FieldInfo maxField = t.GetField("MaxEnergy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                      ?? t.GetField("maxEnergy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    FieldInfo curField = t.GetField("Energy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (curField == null) curField = t.GetField("currentEnergy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (curField == null) curField = t.GetField("energy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                    FieldInfo maxField = t.GetField("MaxEnergy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (maxField == null) maxField = t.GetField("maxEnergy", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
                     if (curField != null)
                     {
                         float cur = Convert.ToSingle(curField.GetValue(comp));
                         float max = maxField != null ? Convert.ToSingle(maxField.GetValue(comp)) : Mathf.Max(cur, 100f);
-                        return (cur, max);
+                        return new EnergyData(cur, max);
                     }
                 }
             }
 
-            return (0f, 0f);
+            return new EnergyData(0f, 0f);
         }
 
-        /// <summary>
-        /// Automatically discovers and triggers any active superpowers from Human Tiers or Beyond Nowhere.
-        /// </summary>
-        public static bool TryTriggerModdedSuperpower(GameObject root, GameObject target, string powerTypeHint = "")
+        public static bool TryTriggerModdedSuperpower(GameObject root, GameObject target, string powerTypeHint)
         {
             if (root == null) return false;
 
             Component[] components = root.GetComponentsInChildren<Component>();
-            foreach (var comp in components)
+            for (int i = 0; i < components.Length; i++)
             {
+                Component comp = components[i];
                 if (comp == null) continue;
                 Type t = comp.GetType();
                 string tName = t.Name.ToLower();
@@ -279,31 +277,31 @@ namespace AdvancedSmartAIMod
                 if (tName.Contains("power") || tName.Contains("ability") || tName.Contains("gifted") ||
                     tName.Contains("anomaly") || tName.Contains("void") || tName.Contains("spell"))
                 {
-                    // Look for execution methods: UsePower, ActivatePower, TriggerAbility, Cast, Shoot, Activate, Use
                     MethodInfo[] methods = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                    foreach (var m in methods)
+                    for (int m = 0; m < methods.Length; m++)
                     {
-                        string mName = m.Name.ToLower();
+                        MethodInfo method = methods[m];
+                        string mName = method.Name.ToLower();
                         if (mName.Contains("usepower") || mName.Contains("activate") || mName.Contains("trigger") ||
                             mName.Contains("cast") || mName.Contains("firepower") || mName.Contains("execute"))
                         {
-                            var parameters = m.GetParameters();
+                            ParameterInfo[] parameters = method.GetParameters();
                             try
                             {
                                 if (parameters.Length == 0)
                                 {
-                                    m.Invoke(comp, null);
+                                    method.Invoke(comp, null);
                                     return true;
                                 }
                                 else if (parameters.Length == 1 && target != null && parameters[0].ParameterType.IsAssignableFrom(target.GetType()))
                                 {
-                                    m.Invoke(comp, new object[] { target });
+                                    method.Invoke(comp, new object[] { target });
                                     return true;
                                 }
                                 else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(Vector2))
                                 {
                                     Vector2 targetPos = target != null ? (Vector2)target.transform.position : (Vector2)root.transform.position + Vector2.right;
-                                    m.Invoke(comp, new object[] { targetPos });
+                                    method.Invoke(comp, new object[] { targetPos });
                                     return true;
                                 }
                             }
@@ -313,16 +311,12 @@ namespace AdvancedSmartAIMod
                 }
             }
 
-            // Also invoke "Use" on any active ability item attached
             root.SendMessage("Use", SendMessageOptions.DontRequireReceiver);
             root.SendMessage("UsePower", SendMessageOptions.DontRequireReceiver);
             root.SendMessage("ActivateAbility", SendMessageOptions.DontRequireReceiver);
             return false;
         }
 
-        /// <summary>
-        /// Checks if an object is an Ability Weapon / Relic from Human Tiers or Beyond Nowhere.
-        /// </summary>
         public static bool IsModdedAbilityWeapon(GameObject obj)
         {
             if (obj == null) return false;
@@ -336,8 +330,9 @@ namespace AdvancedSmartAIMod
             }
 
             Component[] comps = obj.GetComponents<Component>();
-            foreach (var c in comps)
+            for (int i = 0; i < comps.Length; i++)
             {
+                Component c = comps[i];
                 if (c == null) continue;
                 string cName = c.GetType().Name.ToLower();
                 if (cName.Contains("powerweapon") || cName.Contains("abilityweapon") || cName.Contains("anomaly") || cName.Contains("voidweapon"))
@@ -425,40 +420,39 @@ namespace AdvancedSmartAIMod
             if (ai != null)
             {
                 ai.ApplyHealthMultiplier();
-                ModAPI.Notify($"Applied Preset: {preset} (HP: {HealthMultiplier}x, Spd: {MovementSpeedMultiplier}x, Acc: {AccuracyMultiplier:P0}, React: {ReactionTimeMultiplier}x)");
+                ModAPI.Notify("Applied Preset: " + preset + " (HP: " + HealthMultiplier + "x, Spd: " + MovementSpeedMultiplier + "x, Acc: " + (int)(AccuracyMultiplier * 100) + "%, React: " + ReactionTimeMultiplier + "x)");
             }
         }
     }
 
     // =========================================================================================================
-    // SMART AI EXECUTION CONTEXT (FOR ABILITIES & HOOKS)
+    // SMART AI EXECUTION CONTEXT
     // =========================================================================================================
     public class SmartAIContext
     {
         public AdvancedSmartAI AI { get; private set; }
-        public PersonBehaviour Person => AI.Person;
-        public AINavigationController Navigation => AI.Navigation;
-        public AICombatController Combat => AI.Combat;
-        public AIConfig Config => AI.Config;
+        public PersonBehaviour Person { get { return AI.Person; } }
+        public AINavigationController Navigation { get { return AI.Navigation; } }
+        public AICombatController Combat { get { return AI.Combat; } }
+        public AIConfig Config { get { return AI.Config; } }
 
-        public Transform Transform => AI.transform;
-        public Vector2 Position => AI.TorsoLimb != null ? (Vector2)AI.TorsoLimb.transform.position : (Vector2)AI.transform.position;
-        public Vector2 Velocity => AI.TorsoRigidbody != null ? AI.TorsoRigidbody.velocity : Vector2.zero;
+        public Transform Transform { get { return AI.transform; } }
+        public Vector2 Position { get { return AI.TorsoLimb != null ? (Vector2)AI.TorsoLimb.transform.position : (Vector2)AI.transform.position; } }
+        public Vector2 Velocity { get { return AI.TorsoRigidbody != null ? AI.TorsoRigidbody.velocity : Vector2.zero; } }
 
-        public float HealthPercent => AI.GetAverageHealthPercent();
-        public bool IsAlive => AI.IsAlive;
-        public bool IsConscious => AI.IsConscious;
-        public bool IsArmed => AI.Combat.HeldWeapon != null;
-        public PhysicalBehaviour HeldWeapon => AI.Combat.HeldWeapon;
-        public GameObject TargetEnemy => AI.Combat.CurrentTarget;
-        public float TargetDistance => AI.Combat.TargetDistance;
-        public StuckLevel CurrentStuckLevel => AI.Navigation.CurrentStuckLevel;
+        public float HealthPercent { get { return AI.GetAverageHealthPercent(); } }
+        public bool IsAlive { get { return AI.IsAlive; } }
+        public bool IsConscious { get { return AI.IsConscious; } }
+        public bool IsArmed { get { return AI.Combat.HeldWeapon != null; } }
+        public PhysicalBehaviour HeldWeapon { get { return AI.Combat.HeldWeapon; } }
+        public GameObject TargetEnemy { get { return AI.Combat.CurrentTarget; } }
+        public float TargetDistance { get { return AI.Combat.TargetDistance; } }
+        public StuckLevel CurrentStuckLevel { get { return AI.Navigation.CurrentStuckLevel; } }
 
-        // Cross-mod information
-        public int ModdedTier => AI.DetectedTier;
-        public float ModdedEnergy => AI.CurrentEnergy;
-        public float ModdedMaxEnergy => AI.MaxEnergy;
-        public bool IsHumanTiersEntity => AI.DetectedTier >= 0;
+        public int ModdedTier { get { return AI.DetectedTier; } }
+        public float ModdedEnergy { get { return AI.CurrentEnergy; } }
+        public float ModdedMaxEnergy { get { return AI.MaxEnergy; } }
+        public bool IsHumanTiersEntity { get { return AI.DetectedTier >= 0; } }
 
         public SmartAIContext(AdvancedSmartAI ai)
         {
@@ -474,18 +468,22 @@ namespace AdvancedSmartAIMod
         public string AbilityName { get; protected set; }
         public float Cooldown { get; protected set; }
         public float Duration { get; protected set; }
-        public float LastExecutionTime { get; protected set; } = -999f;
-        public bool IsActive { get; protected set; } = false;
+        public float LastExecutionTime { get; protected set; }
+        public bool IsActive { get; protected set; }
 
-        public float RemainingCooldown => Mathf.Max(0f, (LastExecutionTime + Cooldown) - Time.time);
-        public bool IsReady => Time.time >= LastExecutionTime + Cooldown;
+        public float RemainingCooldown { get { return Mathf.Max(0f, (LastExecutionTime + Cooldown) - Time.time); } }
+        public bool IsReady { get { return Time.time >= LastExecutionTime + Cooldown; } }
 
-        protected SmartAIAbility(string name, float cooldown, float duration = 0f)
+        protected SmartAIAbility(string name, float cooldown, float duration)
         {
             AbilityName = name;
             Cooldown = cooldown;
             Duration = duration;
+            LastExecutionTime = -999f;
+            IsActive = false;
         }
+
+        protected SmartAIAbility(string name, float cooldown) : this(name, cooldown, 0f) { }
 
         public abstract bool ShouldTrigger(SmartAIContext context);
         public abstract void OnActivate(SmartAIContext context);
@@ -503,16 +501,11 @@ namespace AdvancedSmartAIMod
     // =========================================================================================================
     // BUILT-IN ABILITIES
     // =========================================================================================================
-
-    /// <summary>
-    /// Tactical Dash & Evasive Leap
-    /// Condition: Enemy is distant (> 7.5m), shooting, or AI is moderately stuck.
-    /// </summary>
     public class TacticalDashAbility : SmartAIAbility
     {
         private float dashForce = 360f;
 
-        public TacticalDashAbility() : base("Tactical Dash", cooldown: 5.0f, duration: 0.35f) { }
+        public TacticalDashAbility() : base("Tactical Dash", 5.0f, 0.35f) { }
 
         public override bool ShouldTrigger(SmartAIContext context)
         {
@@ -533,19 +526,15 @@ namespace AdvancedSmartAIMod
             if (context.AI.PelvisRigidbody != null)
                 context.AI.PelvisRigidbody.AddForce(dashVector * 0.8f, ForceMode2D.Impulse);
 
-            ModAPI.Notify($"{context.AI.name} performed Tactical Dash!");
+            ModAPI.Notify(context.AI.name + " performed Tactical Dash!");
         }
     }
 
-    /// <summary>
-    /// Adrenaline Surge: Regenerates health and boosts movement speed.
-    /// Condition: Health drops below 40%.
-    /// </summary>
     public class AdrenalineSurgeAbility : SmartAIAbility
     {
         private float originalSpeedMultiplier;
 
-        public AdrenalineSurgeAbility() : base("Adrenaline Surge", cooldown: 18f, duration: 6.0f) { }
+        public AdrenalineSurgeAbility() : base("Adrenaline Surge", 18f, 6.0f) { }
 
         public override bool ShouldTrigger(SmartAIContext context)
         {
@@ -556,15 +545,17 @@ namespace AdvancedSmartAIMod
         {
             originalSpeedMultiplier = context.Config.MovementSpeedMultiplier;
             context.Config.MovementSpeedMultiplier *= 1.75f;
-            ModAPI.Notify($"{context.AI.name} activated ADRENALINE SURGE!");
+            ModAPI.Notify(context.AI.name + " activated ADRENALINE SURGE!");
         }
 
         public override void OnUpdate(SmartAIContext context, float deltaTime)
         {
             if (context.Person != null && context.Person.Limbs != null)
             {
-                foreach (var limb in context.Person.Limbs)
+                LimbBehaviour[] limbs = context.Person.Limbs;
+                for (int i = 0; i < limbs.Length; i++)
                 {
+                    LimbBehaviour limb = limbs[i];
                     if (limb != null && limb.Health < 100f)
                     {
                         limb.Health = Mathf.Min(100f, limb.Health + (18f * deltaTime));
@@ -581,16 +572,12 @@ namespace AdvancedSmartAIMod
         }
     }
 
-    /// <summary>
-    /// Kinetic Shockwave: Unleashes a radial physics pulse that flings obstacles and enemies.
-    /// Condition: AI is severely stuck or surrounded by 2+ close-range enemies.
-    /// </summary>
     public class KineticShockwaveAbility : SmartAIAbility
     {
         private float blastRadius = 4.8f;
         private float blastForce = 650f;
 
-        public KineticShockwaveAbility() : base("Kinetic Shockwave", cooldown: 10f, duration: 0.1f) { }
+        public KineticShockwaveAbility() : base("Kinetic Shockwave", 10f, 0.1f) { }
 
         public override bool ShouldTrigger(SmartAIContext context)
         {
@@ -598,8 +585,9 @@ namespace AdvancedSmartAIMod
 
             Collider2D[] nearby = Physics2D.OverlapCircleAll(context.Position, 2.5f);
             int hostileCount = 0;
-            foreach (var col in nearby)
+            for (int i = 0; i < nearby.Length; i++)
             {
+                Collider2D col = nearby[i];
                 if (col.transform.root != context.Transform.root && col.GetComponent<LimbBehaviour>() != null)
                 {
                     hostileCount++;
@@ -611,8 +599,9 @@ namespace AdvancedSmartAIMod
         public override void OnActivate(SmartAIContext context)
         {
             Collider2D[] affected = Physics2D.OverlapCircleAll(context.Position, blastRadius);
-            foreach (var col in affected)
+            for (int i = 0; i < affected.Length; i++)
             {
+                Collider2D col = affected[i];
                 if (col.transform.root == context.Transform.root) continue;
 
                 Rigidbody2D rb = col.attachedRigidbody;
@@ -624,24 +613,19 @@ namespace AdvancedSmartAIMod
                     rb.AddForce(forceDir * (blastForce / dist), ForceMode2D.Impulse);
                 }
             }
-            ModAPI.Notify($"{context.AI.name} unleashed Kinetic Shockwave!");
+            ModAPI.Notify(context.AI.name + " unleashed Kinetic Shockwave!");
         }
     }
 
-    /// <summary>
-    /// Human Tiers & Beyond Nowhere Automated Superpower Integration Ability.
-    /// Dynamically triggers the entity's native modded superpowers when in combat or in peril.
-    /// </summary>
     public class NativeModdedSuperpowerAbility : SmartAIAbility
     {
-        public NativeModdedSuperpowerAbility() : base("Modded Superpower Trigger", cooldown: 3.5f, duration: 0.2f) { }
+        public NativeModdedSuperpowerAbility() : base("Modded Superpower Trigger", 3.5f, 0.2f) { }
 
         public override bool ShouldTrigger(SmartAIContext context)
         {
             if (!context.Config.EnableModdedSuperpowers) return false;
             if (context.TargetEnemy == null && context.CurrentStuckLevel == StuckLevel.None) return false;
 
-            // Trigger if entity has energy or has a detected tier
             return context.IsHumanTiersEntity || context.ModdedEnergy > 5f || context.TargetDistance < 15f;
         }
 
@@ -655,7 +639,7 @@ namespace AdvancedSmartAIMod
 
             if (triggered)
             {
-                ModAPI.Notify($"{context.AI.name} casted Superpower!");
+                ModAPI.Notify(context.AI.name + " casted Superpower!");
             }
         }
     }
@@ -665,9 +649,6 @@ namespace AdvancedSmartAIMod
     // =========================================================================================================
     public class AdvancedSmartAI : MonoBehaviour
     {
-        // -----------------------------------------------------------------------------------------------------
-        // Events & API Hooks
-        // -----------------------------------------------------------------------------------------------------
         public static event Action<AdvancedSmartAI> OnAnyAISpawned;
         public static readonly List<Func<AdvancedSmartAI, SmartAIAbility>> GlobalAbilityFactories = new List<Func<AdvancedSmartAI, SmartAIAbility>>();
 
@@ -680,9 +661,6 @@ namespace AdvancedSmartAIMod
         public event Action<SmartAIContext, SmartAIAbility> OnAbilityTriggered;
         public event Action<SmartAIContext, StuckLevel> OnStuckLevelChanged;
 
-        // -----------------------------------------------------------------------------------------------------
-        // Body References & Components
-        // -----------------------------------------------------------------------------------------------------
         public PersonBehaviour Person { get; private set; }
         public LimbBehaviour HeadLimb { get; private set; }
         public LimbBehaviour TorsoLimb { get; private set; }
@@ -694,25 +672,19 @@ namespace AdvancedSmartAIMod
         public LimbBehaviour FrontFootLimb { get; private set; }
         public LimbBehaviour BackFootLimb { get; private set; }
 
-        public Rigidbody2D TorsoRigidbody => TorsoLimb != null ? TorsoLimb.PhysicalBehaviour.rigidbody : null;
-        public Rigidbody2D PelvisRigidbody => PelvisLimb != null ? PelvisLimb.PhysicalBehaviour.rigidbody : null;
-        public Rigidbody2D HeadRigidbody => HeadLimb != null ? HeadLimb.PhysicalBehaviour.rigidbody : null;
-        public Rigidbody2D FrontArmRigidbody => FrontArmLimb != null ? FrontArmLimb.PhysicalBehaviour.rigidbody : null;
+        public Rigidbody2D TorsoRigidbody { get { return TorsoLimb != null ? TorsoLimb.PhysicalBehaviour.rigidbody : null; } }
+        public Rigidbody2D PelvisRigidbody { get { return PelvisLimb != null ? PelvisLimb.PhysicalBehaviour.rigidbody : null; } }
+        public Rigidbody2D HeadRigidbody { get { return HeadLimb != null ? HeadLimb.PhysicalBehaviour.rigidbody : null; } }
+        public Rigidbody2D FrontArmRigidbody { get { return FrontArmLimb != null ? FrontArmLimb.PhysicalBehaviour.rigidbody : null; } }
 
         public GripBehaviour Grip { get; private set; }
 
-        // -----------------------------------------------------------------------------------------------------
-        // Cross-Mod Status
-        // -----------------------------------------------------------------------------------------------------
-        public int DetectedTier { get; private set; } = -1;
-        public float CurrentEnergy { get; private set; } = 0f;
-        public float MaxEnergy { get; private set; } = 0f;
-        public string ModdedTierInfo => DetectedTier >= 0 ? $"Tier {DetectedTier}" : "";
+        public int DetectedTier { get; private set; }
+        public float CurrentEnergy { get; private set; }
+        public float MaxEnergy { get; private set; }
+        public string ModdedTierInfo { get { return DetectedTier >= 0 ? "Tier " + DetectedTier : ""; } }
 
-        // -----------------------------------------------------------------------------------------------------
-        // Subsystems
-        // -----------------------------------------------------------------------------------------------------
-        public AIConfig Config { get; private set; } = new AIConfig();
+        public AIConfig Config { get; private set; }
         public SmartAIContext Context { get; private set; }
         public AIBalanceController Balance { get; private set; }
         public AINavigationController Navigation { get; private set; }
@@ -724,13 +696,17 @@ namespace AdvancedSmartAIMod
         private float crossModSyncTimer = 0f;
         private bool isInitialized = false;
 
-        public bool IsAlive => Person != null && !Person.IsZombie && Person.Consciousness > 0.05f && HeadLimb != null && HeadLimb.Health > 1f && TorsoLimb != null && TorsoLimb.Health > 1f;
-        public bool IsConscious => Person != null && Person.Consciousness > 0.2f && Person.ShockLevel < 0.9f;
+        public bool IsAlive { get { return Person != null && !Person.IsZombie && Person.Consciousness > 0.05f && HeadLimb != null && HeadLimb.Health > 1f && TorsoLimb != null && TorsoLimb.Health > 1f; } }
+        public bool IsConscious { get { return Person != null && Person.Consciousness > 0.2f && Person.ShockLevel < 0.9f; } }
 
         private void Awake()
         {
             Person = GetComponent<PersonBehaviour>();
+            Config = new AIConfig();
             Context = new SmartAIContext(this);
+            DetectedTier = -1;
+            CurrentEnergy = 0f;
+            MaxEnergy = 0f;
         }
 
         public void InitializeAI()
@@ -743,18 +719,17 @@ namespace AdvancedSmartAIMod
             ApplyHealthMultiplier();
             RegisterContextMenuOptions();
 
-            // Register default built-in abilities
             AbilitySystem.RegisterAbility(new TacticalDashAbility());
             AbilitySystem.RegisterAbility(new AdrenalineSurgeAbility());
             AbilitySystem.RegisterAbility(new KineticShockwaveAbility());
             AbilitySystem.RegisterAbility(new NativeModdedSuperpowerAbility());
 
-            // Instantiate any global 3rd-party registered ability factories
-            foreach (var factory in GlobalAbilityFactories)
+            for (int i = 0; i < GlobalAbilityFactories.Count; i++)
             {
                 try
                 {
-                    SmartAIAbility customAbility = factory?.Invoke(this);
+                    Func<AdvancedSmartAI, SmartAIAbility> factory = GlobalAbilityFactories[i];
+                    SmartAIAbility customAbility = factory != null ? factory(this) : null;
                     if (customAbility != null)
                     {
                         AbilitySystem.RegisterAbility(customAbility);
@@ -762,21 +737,23 @@ namespace AdvancedSmartAIMod
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[AdvancedSmartAI] Error registering global ability factory: {ex.Message}");
+                    Debug.LogError("[AdvancedSmartAI] Error registering global ability factory: " + ex.Message);
                 }
             }
 
             isInitialized = true;
-            OnAIInitialized?.Invoke(Context);
-            OnAnyAISpawned?.Invoke(this);
+            if (OnAIInitialized != null) OnAIInitialized(Context);
+            if (OnAnyAISpawned != null) OnAnyAISpawned(this);
         }
 
         private void CacheLimbReferences()
         {
             if (Person == null || Person.Limbs == null) return;
 
-            foreach (var limb in Person.Limbs)
+            LimbBehaviour[] limbs = Person.Limbs;
+            for (int i = 0; i < limbs.Length; i++)
             {
+                LimbBehaviour limb = limbs[i];
                 if (limb == null) continue;
                 string limbName = limb.gameObject.name.ToLower();
 
@@ -803,20 +780,15 @@ namespace AdvancedSmartAIMod
             }
         }
 
-        /// <summary>
-        /// Automatically synchronizes AI attributes with Human Tiers / Beyond Nowhere stats.
-        /// </summary>
         private void DetectCrossModAttributes()
         {
             DetectedTier = CrossModAdapterEngine.DetectEntityTier(gameObject);
-            var (curEnergy, maxE) = CrossModAdapterEngine.GetEnergyStatus(gameObject);
-            CurrentEnergy = curEnergy;
-            MaxEnergy = maxE;
+            EnergyData eData = CrossModAdapterEngine.GetEnergyStatus(gameObject);
+            CurrentEnergy = eData.Current;
+            MaxEnergy = eData.Max;
 
-            // Automatically scale AI attributes if spawned on or converted from a Human Tiers entity!
             if (DetectedTier >= 1)
             {
-                // Higher tiers get exponentially enhanced health, speed, and reaction times
                 float tierMultiplier = 1f + (DetectedTier * 0.45f);
                 Config.HealthMultiplier = Mathf.Max(Config.HealthMultiplier, tierMultiplier);
                 Config.MovementSpeedMultiplier = Mathf.Max(Config.MovementSpeedMultiplier, 1.0f + (DetectedTier * 0.12f));
@@ -838,8 +810,10 @@ namespace AdvancedSmartAIMod
             if (Person == null || Person.Limbs == null) return;
 
             float targetMaxHealth = 100f * Config.HealthMultiplier;
-            foreach (var limb in Person.Limbs)
+            LimbBehaviour[] limbs = Person.Limbs;
+            for (int i = 0; i < limbs.Length; i++)
             {
+                LimbBehaviour limb = limbs[i];
                 if (limb == null) continue;
                 limb.Health = targetMaxHealth;
                 limb.InitialHealth = targetMaxHealth;
@@ -860,10 +834,9 @@ namespace AdvancedSmartAIMod
             PhysicalBehaviour pb = TorsoLimb.PhysicalBehaviour;
             if (pb.ContextMenuOptions == null) pb.ContextMenuOptions = new List<ContextMenuOption>();
 
-            // Option: Cycle Preset
             pb.ContextMenuOptions.Add(new ContextMenuOption(
                 "smart_ai_preset",
-                $"AI Preset [{Config.CurrentPreset}]",
+                "AI Preset [" + Config.CurrentPreset + "]",
                 "Cycle through AI difficulty/behavior presets.",
                 () =>
                 {
@@ -872,23 +845,21 @@ namespace AdvancedSmartAIMod
                 }
             ));
 
-            // Option: Cycle Stance
             pb.ContextMenuOptions.Add(new ContextMenuOption(
                 "smart_ai_stance",
-                $"AI Stance [{Config.Stance}]",
+                "AI Stance [" + Config.Stance + "]",
                 "Cycle stance (Aggressive, Defensive, Follower, Neutral).",
                 () =>
                 {
                     int nextStance = ((int)Config.Stance + 1) % Enum.GetValues(typeof(AIStance)).Length;
                     Config.Stance = (AIStance)nextStance;
-                    ModAPI.Notify($"AI Stance set to: {Config.Stance}");
+                    ModAPI.Notify("AI Stance set to: " + Config.Stance);
                 }
             ));
 
-            // Option: Cycle Health Multiplier
             pb.ContextMenuOptions.Add(new ContextMenuOption(
                 "smart_ai_health",
-                $"Cycle Health [{Config.HealthMultiplier}x]",
+                "Cycle Health [" + Config.HealthMultiplier + "x]",
                 "Scale AI health (0.5x, 1.0x, 1.8x, 3.0x, 5.0x).",
                 () =>
                 {
@@ -897,14 +868,13 @@ namespace AdvancedSmartAIMod
                     int nextIndex = (currentIndex + 1) % healthSteps.Length;
                     Config.HealthMultiplier = healthSteps[nextIndex];
                     ApplyHealthMultiplier();
-                    ModAPI.Notify($"AI Health Multiplier set to {Config.HealthMultiplier}x");
+                    ModAPI.Notify("AI Health Multiplier set to " + Config.HealthMultiplier + "x");
                 }
             ));
 
-            // Option: Cycle Speed Multiplier
             pb.ContextMenuOptions.Add(new ContextMenuOption(
                 "smart_ai_speed",
-                $"Cycle Speed [{Config.MovementSpeedMultiplier}x]",
+                "Cycle Speed [" + Config.MovementSpeedMultiplier + "x]",
                 "Scale AI movement speed (0.75x, 1.0x, 1.25x, 1.6x, 2.2x).",
                 () =>
                 {
@@ -912,14 +882,13 @@ namespace AdvancedSmartAIMod
                     int currentIndex = Array.FindIndex(speedSteps, s => Mathf.Approximately(s, Config.MovementSpeedMultiplier));
                     int nextIndex = (currentIndex + 1) % speedSteps.Length;
                     Config.MovementSpeedMultiplier = speedSteps[nextIndex];
-                    ModAPI.Notify($"AI Speed Multiplier set to {Config.MovementSpeedMultiplier}x");
+                    ModAPI.Notify("AI Speed Multiplier set to " + Config.MovementSpeedMultiplier + "x");
                 }
             ));
 
-            // Option: Cycle Accuracy Multiplier
             pb.ContextMenuOptions.Add(new ContextMenuOption(
                 "smart_ai_accuracy",
-                $"Cycle Accuracy [{(int)(Config.AccuracyMultiplier * 100)}%]",
+                "Cycle Accuracy [" + (int)(Config.AccuracyMultiplier * 100) + "%]",
                 "Scale weapon aiming accuracy (30%, 60%, 85%, 100%).",
                 () =>
                 {
@@ -927,11 +896,10 @@ namespace AdvancedSmartAIMod
                     int currentIndex = Array.FindIndex(accSteps, a => Mathf.Approximately(a, Config.AccuracyMultiplier));
                     int nextIndex = (currentIndex + 1) % accSteps.Length;
                     Config.AccuracyMultiplier = accSteps[nextIndex];
-                    ModAPI.Notify($"AI Accuracy set to {(int)(Config.AccuracyMultiplier * 100)}%");
+                    ModAPI.Notify("AI Accuracy set to " + (int)(Config.AccuracyMultiplier * 100) + "%");
                 }
             ));
 
-            // Option: Status & Extended Diagnostics
             pb.ContextMenuOptions.Add(new ContextMenuOption(
                 "smart_ai_stats",
                 "Inspect AI Diagnostics",
@@ -940,8 +908,8 @@ namespace AdvancedSmartAIMod
                 {
                     string targetName = Combat.CurrentTarget != null ? Combat.CurrentTarget.name : "None";
                     string weaponName = Combat.HeldWeapon != null ? Combat.HeldWeapon.name : "Unarmed";
-                    string tierStr = DetectedTier >= 0 ? $" | Tier: {DetectedTier} (Energy: {CurrentEnergy:F0}/{MaxEnergy:F0})" : "";
-                    ModAPI.Notify($"[Smart AI Diagnostics]\nHP: {GetAverageHealthPercent():P0} | Target: {targetName}\nWeapon: {weaponName} | Stuck: {Navigation.CurrentStuckLevel}\nPreset: {Config.CurrentPreset} | Stance: {Config.Stance}{tierStr}");
+                    string tierStr = DetectedTier >= 0 ? " | Tier: " + DetectedTier + " (Energy: " + CurrentEnergy.ToString("F0") + "/" + MaxEnergy.ToString("F0") + ")" : "";
+                    ModAPI.Notify("[Smart AI Diagnostics]\nHP: " + (int)(GetAverageHealthPercent() * 100) + "% | Target: " + targetName + "\nWeapon: " + weaponName + " | Stuck: " + Navigation.CurrentStuckLevel + "\nPreset: " + Config.CurrentPreset + " | Stance: " + Config.Stance + tierStr);
                 }
             ));
         }
@@ -952,7 +920,6 @@ namespace AdvancedSmartAIMod
 
             float dt = Time.deltaTime;
 
-            // Monitor health changes for hooks
             healthCheckTimer += dt;
             if (healthCheckTimer >= 0.2f)
             {
@@ -960,19 +927,18 @@ namespace AdvancedSmartAIMod
                 float currentHp = GetAverageHealthPercent();
                 if (Mathf.Abs(currentHp - lastKnownHealthPercent) > 0.05f)
                 {
-                    OnHealthChanged?.Invoke(Context, lastKnownHealthPercent, currentHp);
+                    if (OnHealthChanged != null) OnHealthChanged(Context, lastKnownHealthPercent, currentHp);
                     lastKnownHealthPercent = currentHp;
                 }
             }
 
-            // Sync cross-mod energy and stats periodically
             crossModSyncTimer += dt;
             if (crossModSyncTimer >= 0.5f)
             {
                 crossModSyncTimer = 0f;
-                var (eCur, eMax) = CrossModAdapterEngine.GetEnergyStatus(gameObject);
-                CurrentEnergy = eCur;
-                MaxEnergy = eMax;
+                EnergyData eData = CrossModAdapterEngine.GetEnergyStatus(gameObject);
+                CurrentEnergy = eData.Current;
+                MaxEnergy = eData.Max;
             }
 
             Navigation.UpdateNavigation(dt);
@@ -1003,8 +969,10 @@ namespace AdvancedSmartAIMod
             if (Person == null || Person.Limbs == null || Person.Limbs.Length == 0) return 0f;
             float total = 0f;
             int count = 0;
-            foreach (var limb in Person.Limbs)
+            LimbBehaviour[] limbs = Person.Limbs;
+            for (int i = 0; i < limbs.Length; i++)
             {
+                LimbBehaviour limb = limbs[i];
                 if (limb != null)
                 {
                     total += Mathf.Clamp01(limb.Health / (100f * Config.HealthMultiplier));
@@ -1014,14 +982,14 @@ namespace AdvancedSmartAIMod
             return count > 0 ? (total / count) : 0f;
         }
 
-        public void NotifyWeaponEquipped(PhysicalBehaviour weapon) => OnWeaponEquipped?.Invoke(Context, weapon);
-        public void NotifyWeaponFired(PhysicalBehaviour weapon) => OnWeaponFired?.Invoke(Context, weapon);
-        public void NotifyWeaponThrown(PhysicalBehaviour weapon, Vector2 velocity) => OnWeaponThrown?.Invoke(Context, weapon, velocity);
-        public void NotifyTargetAcquired(GameObject target) => OnTargetAcquired?.Invoke(Context, target);
-        public void NotifyAbilityTriggered(SmartAIAbility ability) => OnAbilityTriggered?.Invoke(Context, ability);
-        public void NotifyStuckLevelChanged(StuckLevel level) => OnStuckLevelChanged?.Invoke(Context, level);
+        public void NotifyWeaponEquipped(PhysicalBehaviour weapon) { if (OnWeaponEquipped != null) OnWeaponEquipped(Context, weapon); }
+        public void NotifyWeaponFired(PhysicalBehaviour weapon) { if (OnWeaponFired != null) OnWeaponFired(Context, weapon); }
+        public void NotifyWeaponThrown(PhysicalBehaviour weapon, Vector2 velocity) { if (OnWeaponThrown != null) OnWeaponThrown(Context, weapon, velocity); }
+        public void NotifyTargetAcquired(GameObject target) { if (OnTargetAcquired != null) OnTargetAcquired(Context, target); }
+        public void NotifyAbilityTriggered(SmartAIAbility ability) { if (OnAbilityTriggered != null) OnAbilityTriggered(Context, ability); }
+        public void NotifyStuckLevelChanged(StuckLevel level) { if (OnStuckLevelChanged != null) OnStuckLevelChanged(Context, level); }
 
-        public void RegisterAbility(SmartAIAbility ability) => AbilitySystem.RegisterAbility(ability);
+        public void RegisterAbility(SmartAIAbility ability) { AbilitySystem.RegisterAbility(ability); }
 
         public static void RegisterGlobalAbilityFactory(Func<AdvancedSmartAI, SmartAIAbility> factory)
         {
@@ -1055,16 +1023,17 @@ namespace AdvancedSmartAIMod
         {
             if (ai.Person == null || ai.Person.Limbs == null) return;
             float mass = 0f;
-            foreach (var limb in ai.Person.Limbs)
+            LimbBehaviour[] limbs = ai.Person.Limbs;
+            for (int i = 0; i < limbs.Length; i++)
             {
-                if (limb != null && limb.PhysicalBehaviour.rigidbody != null)
+                LimbBehaviour limb = limbs[i];
+                if (limb != null && limb.PhysicalBehaviour != null && limb.PhysicalBehaviour.rigidbody != null)
                 {
                     mass += limb.PhysicalBehaviour.rigidbody.mass;
                 }
             }
             totalRagdollMass = Mathf.Max(40f, mass);
 
-            // Scale PD gains adaptively to mass
             float massRatio = totalRagdollMass / 80f;
             pGainTorso = 300f * massRatio;
             dGainTorso = 24f * Mathf.Sqrt(massRatio);
@@ -1076,11 +1045,9 @@ namespace AdvancedSmartAIMod
         {
             if (ai.TorsoLimb == null || ai.TorsoRigidbody == null) return;
 
-            // Check if knocked down flat (angle > 70 deg)
             float torsoZ = ai.TorsoRigidbody.rotation;
             if (Mathf.Abs(Mathf.DeltaAngle(torsoZ, 0f)) > 75f)
             {
-                // Perform quick recovery kip-up / spring
                 RecoverFromKnockdown();
                 return;
             }
@@ -1110,7 +1077,6 @@ namespace AdvancedSmartAIMod
 
         private void RecoverFromKnockdown()
         {
-            // Apply upward and rotational spring impulse to torso and pelvis
             if (ai.TorsoRigidbody != null)
             {
                 float sign = -Mathf.Sign(ai.TorsoRigidbody.rotation);
@@ -1144,6 +1110,7 @@ namespace AdvancedSmartAIMod
 
         private void SupportGroundFeet()
         {
+            if (ai.PelvisLimb == null) return;
             RaycastHit2D groundHit = Physics2D.Raycast(ai.PelvisLimb.transform.position, Vector2.down, 1.8f, LayerMask.GetMask("Default", "Objects", "Debris"));
             if (groundHit.collider != null && groundHit.collider.transform.root != ai.transform.root)
             {
@@ -1164,10 +1131,9 @@ namespace AdvancedSmartAIMod
     {
         private readonly AdvancedSmartAI ai;
 
-        public float MoveInput { get; private set; } = 0f;
-        public float FacingDirection { get; private set; } = 1f;
-        public StuckLevel CurrentStuckLevel { get; private set; } = StuckLevel.None;
-        public bool IsMantleClimbing { get; private set; } = false;
+        public float MoveInput { get; private set; }
+        public float FacingDirection { get; private set; }
+        public StuckLevel CurrentStuckLevel { get; private set; }
 
         private float lastJumpTime = -999f;
         private float jumpCooldown = 1.1f;
@@ -1180,6 +1146,8 @@ namespace AdvancedSmartAIMod
         public AINavigationController(AdvancedSmartAI ai)
         {
             this.ai = ai;
+            FacingDirection = 1f;
+            CurrentStuckLevel = StuckLevel.None;
             if (ai.TorsoLimb != null)
             {
                 lastPosition = ai.TorsoLimb.transform.position;
@@ -1206,7 +1174,6 @@ namespace AdvancedSmartAIMod
 
             Vector2 currentPos = ai.TorsoLimb.transform.position;
 
-            // Priority 1: High-priority weapon pickup
             if (ai.Combat.NeedsWeapon && ai.Combat.NearestWeapon != null)
             {
                 float weaponDeltaX = ai.Combat.NearestWeapon.transform.position.x - currentPos.x;
@@ -1218,7 +1185,6 @@ namespace AdvancedSmartAIMod
                 return;
             }
 
-            // Priority 2: Combat navigation
             if (ai.Combat.CurrentTarget != null)
             {
                 float targetDeltaX = ai.Combat.CurrentTarget.transform.position.x - currentPos.x;
@@ -1263,42 +1229,35 @@ namespace AdvancedSmartAIMod
             Vector2 originFeet = ai.PelvisLimb.transform.position + Vector3.down * 0.6f;
             Vector2 moveDir = new Vector2(FacingDirection, 0f);
 
-            // 1. Low raycast: Low obstacles
             RaycastHit2D lowObstacle = Physics2D.Raycast(originFeet, moveDir, 1.4f, LayerMask.GetMask("Default", "Objects"));
             bool lowBlocked = lowObstacle.collider != null && lowObstacle.collider.transform.root != ai.transform.root;
 
-            // 2. Mid raycast: Waist-high barriers
             RaycastHit2D midObstacle = Physics2D.Raycast(originWaist, moveDir, 1.8f, LayerMask.GetMask("Default", "Objects"));
             bool midBlocked = midObstacle.collider != null && midObstacle.collider.transform.root != ai.transform.root;
 
-            // 3. High raycast: High wall / ledge mantle check (up to 3.2m)
             RaycastHit2D highObstacle = Physics2D.Raycast(originWaist + Vector2.up * 1.5f, moveDir, 2.0f, LayerMask.GetMask("Default", "Objects"));
             bool highBlocked = highObstacle.collider != null && highObstacle.collider.transform.root != ai.transform.root;
 
-            // 4. Overhead ceiling check
             RaycastHit2D ceilingCheck = Physics2D.Raycast(originWaist + Vector2.up * 0.8f, Vector2.up, 1.6f, LayerMask.GetMask("Default", "Objects"));
             bool ceilingBlocked = ceilingCheck.collider != null && ceilingCheck.collider.transform.root != ai.transform.root;
 
-            // 5. Gap / Pit raycast: Cast downward 1.8m in front of feet
             Vector2 pitProbePos = originFeet + (moveDir * 1.6f);
             RaycastHit2D pitCheck = Physics2D.Raycast(pitProbePos, Vector2.down, 2.6f, LayerMask.GetMask("Default", "Objects"));
             bool gapDetected = (pitCheck.collider == null);
 
-            // Execute Mantle Climb if high wall detected and mantling is enabled
             if (midBlocked && highBlocked && ai.Config.EnableLedgeMantling && !ceilingBlocked)
             {
                 ExecuteLedgeMantle();
                 return;
             }
 
-            // Execute Jump / Vault
             if ((lowBlocked || midBlocked || gapDetected) && !ceilingBlocked)
             {
-                ExecuteJump(highJump: midBlocked || gapDetected);
+                ExecuteJump(midBlocked || gapDetected);
             }
         }
 
-        public void ExecuteJump(bool highJump = false)
+        public void ExecuteJump(bool highJump)
         {
             if (Time.time < lastJumpTime + jumpCooldown || !isGrounded) return;
 
@@ -1312,7 +1271,7 @@ namespace AdvancedSmartAIMod
             if (ai.PelvisRigidbody != null) ai.PelvisRigidbody.AddForce(impulse, ForceMode2D.Impulse);
             if (ai.TorsoRigidbody != null) ai.TorsoRigidbody.AddForce(impulse * 0.85f, ForceMode2D.Impulse);
 
-            if (ai.FrontLegLimb != null && ai.FrontLegLimb.PhysicalBehaviour.rigidbody != null)
+            if (ai.FrontLegLimb != null && ai.FrontLegLimb.PhysicalBehaviour != null && ai.FrontLegLimb.PhysicalBehaviour.rigidbody != null)
                 ai.FrontLegLimb.PhysicalBehaviour.rigidbody.AddForce(Vector2.up * (jumpForce * 0.45f), ForceMode2D.Impulse);
         }
 
@@ -1321,7 +1280,6 @@ namespace AdvancedSmartAIMod
             if (Time.time < lastJumpTime + 0.8f) return;
             lastJumpTime = Time.time;
 
-            // High pull-up impulse
             Vector2 mantleImpulse = new Vector2(FacingDirection * 150f, 380f);
             if (ai.TorsoRigidbody != null) ai.TorsoRigidbody.AddForce(mantleImpulse, ForceMode2D.Impulse);
             if (ai.PelvisRigidbody != null) ai.PelvisRigidbody.AddForce(mantleImpulse * 0.9f, ForceMode2D.Impulse);
@@ -1340,7 +1298,7 @@ namespace AdvancedSmartAIMod
                 ai.PelvisRigidbody.AddForce(walkForce * 0.85f, ForceMode2D.Force);
             }
 
-            if (ai.FrontFootLimb != null && ai.FrontFootLimb.PhysicalBehaviour.rigidbody != null)
+            if (ai.FrontFootLimb != null && ai.FrontFootLimb.PhysicalBehaviour != null && ai.FrontFootLimb.PhysicalBehaviour.rigidbody != null)
             {
                 float stepPhase = Mathf.Sin(Time.time * 8.5f * ai.Config.MovementSpeedMultiplier);
                 Vector2 footForce = new Vector2(MoveInput * targetSpeed * 0.35f, Mathf.Max(0f, stepPhase * 28f));
@@ -1348,9 +1306,6 @@ namespace AdvancedSmartAIMod
             }
         }
 
-        // =====================================================================================================
-        // UNSTUCK ROUTINE (3-TIER ESCALATION + MODDED TELEPORT/SHOCKWAVE ESCAPE)
-        // =====================================================================================================
         private void UpdateUnstuckRoutine(float deltaTime)
         {
             if (ai.TorsoLimb == null) return;
@@ -1407,7 +1362,7 @@ namespace AdvancedSmartAIMod
                     break;
 
                 case StuckLevel.Moderate:
-                    ExecuteJump(highJump: true);
+                    ExecuteJump(true);
                     if (ai.TorsoRigidbody != null)
                     {
                         ai.TorsoRigidbody.AddForce(new Vector2(-FacingDirection * 150f, 190f), ForceMode2D.Impulse);
@@ -1415,7 +1370,6 @@ namespace AdvancedSmartAIMod
                     break;
 
                 case StuckLevel.Severe:
-                    // If modded superpower is available, attempt to blast / teleport out
                     if (ai.Config.EnableModdedSuperpowers)
                     {
                         CrossModAdapterEngine.TryTriggerModdedSuperpower(ai.gameObject, null, "escape");
@@ -1442,11 +1396,11 @@ namespace AdvancedSmartAIMod
 
         public GameObject CurrentTarget { get; private set; }
         public PhysicalBehaviour HeldWeapon { get; private set; }
-        public WeaponType CurrentWeaponType { get; private set; } = WeaponType.None;
+        public WeaponType CurrentWeaponType { get; private set; }
         public PhysicalBehaviour NearestWeapon { get; private set; }
-        public float TargetDistance { get; private set; } = 999f;
-        public int TargetTier { get; private set; } = -1;
-        public bool NeedsWeapon => HeldWeapon == null || (CurrentWeaponType == WeaponType.Firearm && IsWeaponOutOfAmmo(HeldWeapon));
+        public float TargetDistance { get; private set; }
+        public int TargetTier { get; private set; }
+        public bool NeedsWeapon { get { return HeldWeapon == null || (CurrentWeaponType == WeaponType.Firearm && IsWeaponOutOfAmmo(HeldWeapon)); } }
 
         private float scanTimer = 0f;
         private float fireCooldownTimer = 0f;
@@ -1460,6 +1414,9 @@ namespace AdvancedSmartAIMod
         public AICombatController(AdvancedSmartAI ai)
         {
             this.ai = ai;
+            CurrentWeaponType = WeaponType.None;
+            TargetDistance = 999f;
+            TargetTier = -1;
         }
 
         public void UpdateCombat(float deltaTime)
@@ -1497,8 +1454,9 @@ namespace AdvancedSmartAIMod
             float bestScore = -9999f;
             int detectedEnemyTier = -1;
 
-            foreach (var col in candidates)
+            for (int i = 0; i < candidates.Length; i++)
             {
+                Collider2D col = candidates[i];
                 if (col == null || col.transform.root == ai.transform.root) continue;
 
                 LimbBehaviour limb = col.GetComponent<LimbBehaviour>();
@@ -1513,10 +1471,10 @@ namespace AdvancedSmartAIMod
                 RaycastHit2D los = Physics2D.Linecast(myPos, limb.transform.position, LayerMask.GetMask("Default", "Objects"));
                 if (los.collider != null && los.collider.transform.root != targetPerson.transform.root) continue;
 
-                // Score candidate: Proximity + Armed Threat + Human Tiers / Beyond Nowhere Tier Score
                 float score = 120f - dist;
 
-                if (targetPerson.GetComponentInChildren<GripBehaviour>()?.Holding != null)
+                GripBehaviour grip = targetPerson.GetComponentInChildren<GripBehaviour>();
+                if (grip != null && grip.Holding != null)
                 {
                     score += 40f;
                 }
@@ -1524,7 +1482,7 @@ namespace AdvancedSmartAIMod
                 int enemyTier = CrossModAdapterEngine.DetectEntityTier(targetPerson.gameObject);
                 if (enemyTier > 0)
                 {
-                    score += enemyTier * 15f; // Prioritize dangerous high-tier superhumans!
+                    score += enemyTier * 15f;
                 }
 
                 if (score > bestScore)
@@ -1563,8 +1521,9 @@ namespace AdvancedSmartAIMod
             PhysicalBehaviour bestWeapon = null;
             float bestScore = -999f;
 
-            foreach (var col in items)
+            for (int i = 0; i < items.Length; i++)
             {
+                Collider2D col = items[i];
                 if (col == null || col.transform.root == ai.transform.root) continue;
 
                 PhysicalBehaviour pb = col.GetComponent<PhysicalBehaviour>();
@@ -1579,7 +1538,6 @@ namespace AdvancedSmartAIMod
 
                 float dist = Vector2.Distance(myPos, pb.transform.position);
 
-                // Prefer Ability Weapons & Firearms over standard melee
                 float score = 50f - dist;
                 if (type == WeaponType.AbilityWeapon) score += 30f;
                 else if (type == WeaponType.Firearm) score += 20f;
@@ -1633,7 +1591,7 @@ namespace AdvancedSmartAIMod
         {
             if (ai.Grip == null) return;
 
-            PhysicalBehaviour currentlyHeld = ai.Grip.Holding ?? ai.Grip.GetComponent<PhysicalBehaviour>();
+            PhysicalBehaviour currentlyHeld = ai.Grip.Holding != null ? ai.Grip.Holding : ai.Grip.GetComponent<PhysicalBehaviour>();
             if (currentlyHeld != HeldWeapon)
             {
                 HeldWeapon = currentlyHeld;
@@ -1646,21 +1604,24 @@ namespace AdvancedSmartAIMod
         {
             if (pb == null || pb.gameObject == null) return WeaponType.None;
 
-            // Check if it is an Ability Weapon from Human Tiers / Beyond Nowhere
             if (CrossModAdapterEngine.IsModdedAbilityWeapon(pb.gameObject))
             {
                 return WeaponType.AbilityWeapon;
             }
 
             Component[] components = pb.gameObject.GetComponents<Component>();
-            foreach (var comp in components)
+            for (int i = 0; i < components.Length; i++)
             {
+                Component comp = components[i];
                 if (comp == null) continue;
                 string typeName = comp.GetType().Name.ToLower();
 
-                if (FirearmTypeKeywords.Any(k => typeName.Contains(k)))
+                for (int k = 0; k < FirearmTypeKeywords.Length; k++)
                 {
-                    return WeaponType.Firearm;
+                    if (typeName.Contains(FirearmTypeKeywords[k]))
+                    {
+                        return WeaponType.Firearm;
+                    }
                 }
             }
 
@@ -1670,7 +1631,11 @@ namespace AdvancedSmartAIMod
             }
 
             string objName = pb.gameObject.name.ToLower();
-            if (FirearmTypeKeywords.Any(k => objName.Contains(k))) return WeaponType.Firearm;
+            for (int k = 0; k < FirearmTypeKeywords.Length; k++)
+            {
+                if (objName.Contains(FirearmTypeKeywords[k])) return WeaponType.Firearm;
+            }
+
             if (objName.Contains("sword") || objName.Contains("knife") || objName.Contains("axe") || objName.Contains("baton") || objName.Contains("spear") || objName.Contains("blade") || objName.Contains("dagger"))
                 return WeaponType.Melee;
 
@@ -1683,8 +1648,9 @@ namespace AdvancedSmartAIMod
             if (dryFireCount >= 3) return true;
 
             Component[] components = weapon.GetComponents<Component>();
-            foreach (var comp in components)
+            for (int i = 0; i < components.Length; i++)
             {
+                Component comp = components[i];
                 if (comp == null) continue;
                 Type t = comp.GetType();
 
@@ -1695,8 +1661,8 @@ namespace AdvancedSmartAIMod
                     if (!hasAmmo) return true;
                 }
 
-                FieldInfo ammoField = t.GetField("Ammo", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                   ?? t.GetField("CurrentAmmo", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                FieldInfo ammoField = t.GetField("Ammo", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (ammoField == null) ammoField = t.GetField("CurrentAmmo", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 if (ammoField != null && ammoField.FieldType == typeof(int))
                 {
                     int ammo = (int)ammoField.GetValue(comp);
@@ -1852,7 +1818,7 @@ namespace AdvancedSmartAIMod
         private readonly AdvancedSmartAI ai;
         private readonly List<SmartAIAbility> abilities = new List<SmartAIAbility>();
 
-        public IReadOnlyList<SmartAIAbility> Abilities => abilities.AsReadOnly();
+        public IReadOnlyList<SmartAIAbility> Abilities { get { return abilities.AsReadOnly(); } }
 
         public AIAbilityController(AdvancedSmartAI ai)
         {
@@ -1880,7 +1846,7 @@ namespace AdvancedSmartAIMod
         {
             for (int i = 0; i < abilities.Count; i++)
             {
-                var ability = abilities[i];
+                SmartAIAbility ability = abilities[i];
 
                 if (ability.IsActive)
                 {

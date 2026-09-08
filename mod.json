@@ -1,8 +1,18 @@
 {
   "Name": "Advanced Smart AI NPC",
   "Author": "AI Studio",
-  "Description": "Introduces an Advanced Smart AI NPC with dynamic environmental navigation, tactical obstacle jumping, anti-stuck routines, intelligent weapon handling (firearms, melee, and tactical weapon throwing), context menu configuration, and a modular ability hook API.",
-  "Version": "1.0.0",
-  "Active": true,
-  "TargetVersion": "1.27+"
+  "Description": "An advanced autonomous Smart AI human with active balance stabilization, dynamic obstacle navigation, advanced combat tactics (firearms, melee, and weapon throwing), in-game context menu settings, modular ability hooks, and automatic compatibility with Human Tiers & Beyond Nowhere.",
+  "ModVersion": "1.0.0",
+  "GameVersion": "1.27+",
+  "ThumbnailPath": "",
+  "EntryPoint": "AdvancedSmartAIMod.Mod",
+  "Tags": [
+    "NPC",
+    "AI",
+    "Entities",
+    "Weapons"
+  ],
+  "Scripts": [
+    "AdvancedSmartAI.cs"
+  ]
 }
