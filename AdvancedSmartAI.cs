@@ -13,7 +13,6 @@ namespace AdvancedSmartAIMod
     /// <summary>
     /// Mod entry point loaded by People Playground upon game initialization.
     /// Matches the EntryPoint defined in mod.json: "AdvancedSmartAIMod.Mod"
-    /// Fully compliant with People Playground's security verification rules (zero suspicious identifiers).
     /// </summary>
     public class Mod
     {
@@ -32,35 +31,6 @@ namespace AdvancedSmartAIMod
                     ai.InitializeAI();
                 }
             });
-
-            // Register global context menu action allowing players to convert ANY existing vanilla or modded human
-            // (including Human Tiers and Beyond Nowhere entities) into a Smart AI
-            ModAPI.RegisterContextMenu<PersonBehaviour>(new ContextMenuOption(
-                "convert_to_smart_ai",
-                "Convert to Smart AI",
-                "Inject Advanced Smart AI intelligence, balance, and combat tactics into this entity.",
-                (person) =>
-                {
-                    if (person == null || person.gameObject == null) return;
-
-                    AdvancedSmartAI existingAI = person.GetComponent<AdvancedSmartAI>();
-                    if (existingAI == null)
-                    {
-                        AdvancedSmartAI newAI = person.gameObject.AddComponent<AdvancedSmartAI>();
-                        newAI.InitializeAI();
-
-                        string tierInfo = newAI.ModdedTierInfo;
-                        string msg = string.IsNullOrEmpty(tierInfo)
-                            ? "Human converted to Advanced Smart AI!"
-                            : "Entity converted to Advanced Smart AI! [" + tierInfo + "]";
-                        ModAPI.Notify(msg);
-                    }
-                    else
-                    {
-                        ModAPI.Notify("This entity is already an Advanced Smart AI!");
-                    }
-                }
-            ));
 
             ModAPI.Notify("Advanced Smart AI Mod initialized (Human Tiers & Beyond Nowhere auto-compatibility active)!");
         }
@@ -124,7 +94,7 @@ namespace AdvancedSmartAIMod
     // =========================================================================================================
     /// <summary>
     /// Pure Unity-native cross-mod compatibility adapter for Human Tiers and Beyond Nowhere.
-    /// Avoids any restricted/suspicious reflection calls, relying exclusively on Unity GameObject & Component inspection.
+    /// Avoids any restricted reflection calls, relying exclusively on Unity GameObject & Component inspection.
     /// </summary>
     public static class CrossModAdapterEngine
     {
@@ -132,7 +102,7 @@ namespace AdvancedSmartAIMod
         {
             if (root == null) return -1;
 
-            // 1. Inspect GameObject name heuristics (Standard across Human Tiers & Beyond Nowhere spawns)
+            // 1. Inspect GameObject name heuristics
             string objName = root.name.ToLower();
             for (int k = 8; k >= 1; k--)
             {
@@ -214,7 +184,6 @@ namespace AdvancedSmartAIMod
         {
             if (root == null) return false;
 
-            // Use native Unity SendMessage / BroadcastMessage which calls any matching superpower methods safely
             if (target != null)
             {
                 root.SendMessage("UsePower", target, SendMessageOptions.DontRequireReceiver);
@@ -271,6 +240,7 @@ namespace AdvancedSmartAIMod
         [Header("Behavioral Settings")]
         public AIStance Stance = AIStance.Aggressive;
         public AIPreset CurrentPreset = AIPreset.StandardAI;
+        public bool AllowWeaponPickup = true;
         public bool EnableJumpNavigation = true;
         public bool EnableLedgeMantling = true;
         public bool EnableWeaponThrowing = true;
@@ -589,8 +559,6 @@ namespace AdvancedSmartAIMod
         public Rigidbody2D HeadRigidbody { get { return HeadLimb != null ? HeadLimb.PhysicalBehaviour.rigidbody : null; } }
         public Rigidbody2D FrontArmRigidbody { get { return FrontArmLimb != null ? FrontArmLimb.PhysicalBehaviour.rigidbody : null; } }
 
-        public GripBehaviour Grip { get; private set; }
-
         public int DetectedTier { get; private set; }
         public float CurrentEnergy { get; private set; }
         public float MaxEnergy { get; private set; }
@@ -608,7 +576,7 @@ namespace AdvancedSmartAIMod
         private float crossModSyncTimer = 0f;
         private bool isInitialized = false;
 
-        public bool IsAlive { get { return Person != null && !Person.IsZombie && Person.Consciousness > 0.05f && HeadLimb != null && HeadLimb.Health > 1f && TorsoLimb != null && TorsoLimb.Health > 1f; } }
+        public bool IsAlive { get { return Person != null && Person.Consciousness > 0.05f && HeadLimb != null && HeadLimb.Health > 1f && TorsoLimb != null && TorsoLimb.Health > 1f; } }
         public bool IsConscious { get { return Person != null && Person.Consciousness > 0.2f && Person.ShockLevel < 0.9f; } }
 
         private void Awake()
@@ -678,17 +646,6 @@ namespace AdvancedSmartAIMod
                 else if (limbName.Contains("legback") || limbName.Contains("lowerlegback")) BackLegLimb = limb;
                 else if (limbName.Contains("footfront")) FrontFootLimb = limb;
                 else if (limbName.Contains("footback")) BackFootLimb = limb;
-
-                GripBehaviour limbGrip = limb.GetComponent<GripBehaviour>();
-                if (limbGrip != null && Grip == null)
-                {
-                    Grip = limbGrip;
-                }
-            }
-
-            if (Grip == null)
-            {
-                Grip = GetComponentInChildren<GripBehaviour>();
             }
         }
 
@@ -729,11 +686,9 @@ namespace AdvancedSmartAIMod
                 if (limb == null) continue;
                 limb.Health = targetMaxHealth;
                 limb.InitialHealth = targetMaxHealth;
-                limb.HealRate = Mathf.Max(limb.HealRate, 1.5f * Config.HealthMultiplier);
                 limb.Numbness = Mathf.Clamp(limb.Numbness * 0.5f, 0f, 0.2f);
             }
 
-            Person.Bravery = 1.0f;
             Person.Consciousness = 1.0f;
             Person.ShockLevel = 0.0f;
             Person.PainLevel = 0.0f;
@@ -744,36 +699,36 @@ namespace AdvancedSmartAIMod
             if (TorsoLimb == null || TorsoLimb.PhysicalBehaviour == null) return;
 
             PhysicalBehaviour pb = TorsoLimb.PhysicalBehaviour;
-            if (pb.ContextMenuOptions == null) pb.ContextMenuOptions = new List<ContextMenuOption>();
+            if (pb.ContextMenuOptions == null || pb.ContextMenuOptions.Buttons == null) return;
 
-            pb.ContextMenuOptions.Add(new ContextMenuOption(
+            pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_preset",
                 "AI Preset [" + Config.CurrentPreset + "]",
                 "Cycle through AI difficulty/behavior presets.",
-                () =>
+                new UnityAction[] { () =>
                 {
                     int nextPreset = ((int)Config.CurrentPreset + 1) % Enum.GetValues(typeof(AIPreset)).Length;
                     Config.ApplyPreset((AIPreset)nextPreset, this);
-                }
+                }}
             ));
 
-            pb.ContextMenuOptions.Add(new ContextMenuOption(
+            pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_stance",
                 "AI Stance [" + Config.Stance + "]",
                 "Cycle stance (Aggressive, Defensive, Follower, Neutral).",
-                () =>
+                new UnityAction[] { () =>
                 {
                     int nextStance = ((int)Config.Stance + 1) % Enum.GetValues(typeof(AIStance)).Length;
                     Config.Stance = (AIStance)nextStance;
                     ModAPI.Notify("AI Stance set to: " + Config.Stance);
-                }
+                }}
             ));
 
-            pb.ContextMenuOptions.Add(new ContextMenuOption(
+            pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_health",
                 "Cycle Health [" + Config.HealthMultiplier + "x]",
                 "Scale AI health (0.5x, 1.0x, 1.8x, 3.0x, 5.0x).",
-                () =>
+                new UnityAction[] { () =>
                 {
                     float[] healthSteps = new float[] { 0.5f, 1.0f, 1.8f, 3.0f, 5.0f };
                     int currentIndex = Array.FindIndex(healthSteps, h => Mathf.Approximately(h, Config.HealthMultiplier));
@@ -781,48 +736,48 @@ namespace AdvancedSmartAIMod
                     Config.HealthMultiplier = healthSteps[nextIndex];
                     ApplyHealthMultiplier();
                     ModAPI.Notify("AI Health Multiplier set to " + Config.HealthMultiplier + "x");
-                }
+                }}
             ));
 
-            pb.ContextMenuOptions.Add(new ContextMenuOption(
+            pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_speed",
                 "Cycle Speed [" + Config.MovementSpeedMultiplier + "x]",
                 "Scale AI movement speed (0.75x, 1.0x, 1.25x, 1.6x, 2.2x).",
-                () =>
+                new UnityAction[] { () =>
                 {
                     float[] speedSteps = new float[] { 0.75f, 1.0f, 1.25f, 1.6f, 2.2f };
                     int currentIndex = Array.FindIndex(speedSteps, s => Mathf.Approximately(s, Config.MovementSpeedMultiplier));
                     int nextIndex = (currentIndex + 1) % speedSteps.Length;
                     Config.MovementSpeedMultiplier = speedSteps[nextIndex];
                     ModAPI.Notify("AI Speed Multiplier set to " + Config.MovementSpeedMultiplier + "x");
-                }
+                }}
             ));
 
-            pb.ContextMenuOptions.Add(new ContextMenuOption(
+            pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_accuracy",
                 "Cycle Accuracy [" + (int)(Config.AccuracyMultiplier * 100) + "%]",
                 "Scale weapon aiming accuracy (30%, 60%, 85%, 100%).",
-                () =>
+                new UnityAction[] { () =>
                 {
                     float[] accSteps = new float[] { 0.30f, 0.60f, 0.85f, 1.0f };
                     int currentIndex = Array.FindIndex(accSteps, a => Mathf.Approximately(a, Config.AccuracyMultiplier));
                     int nextIndex = (currentIndex + 1) % accSteps.Length;
                     Config.AccuracyMultiplier = accSteps[nextIndex];
                     ModAPI.Notify("AI Accuracy set to " + (int)(Config.AccuracyMultiplier * 100) + "%");
-                }
+                }}
             ));
 
-            pb.ContextMenuOptions.Add(new ContextMenuOption(
+            pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_stats",
                 "Inspect AI Diagnostics",
                 "Display current health, combat target, equipped weapon, tier stats, and active abilities.",
-                () =>
+                new UnityAction[] { () =>
                 {
                     string targetName = Combat.CurrentTarget != null ? Combat.CurrentTarget.name : "None";
                     string weaponName = Combat.HeldWeapon != null ? Combat.HeldWeapon.name : "Unarmed";
                     string tierStr = DetectedTier >= 0 ? " | Tier: " + DetectedTier + " (Energy: " + CurrentEnergy.ToString("F0") + "/" + MaxEnergy.ToString("F0") + ")" : "";
                     ModAPI.Notify("[Smart AI Diagnostics]\nHP: " + (int)(GetAverageHealthPercent() * 100) + "% | Target: " + targetName + "\nWeapon: " + weaponName + " | Stuck: " + Navigation.CurrentStuckLevel + "\nPreset: " + Config.CurrentPreset + " | Stance: " + Config.Stance + tierStr);
-                }
+                }}
             ));
         }
 
@@ -1086,7 +1041,7 @@ namespace AdvancedSmartAIMod
 
             Vector2 currentPos = ai.TorsoLimb.transform.position;
 
-            if (ai.Combat.NeedsWeapon && ai.Combat.NearestWeapon != null)
+            if (ai.Config.AllowWeaponPickup && ai.Combat.NeedsWeapon && ai.Combat.NearestWeapon != null)
             {
                 float weaponDeltaX = ai.Combat.NearestWeapon.transform.position.x - currentPos.x;
                 if (Mathf.Abs(weaponDeltaX) > 0.6f)
@@ -1300,7 +1255,7 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // COMBAT & GENERIC WEAPON INTERACTION CONTROLLER
+    // COMBAT & GENERIC WEAPON INTERACTION CONTROLLER (NATIVE PHYSICS JOINT ATTACHMENT)
     // =========================================================================================================
     public class AICombatController
     {
@@ -1314,6 +1269,7 @@ namespace AdvancedSmartAIMod
         public int TargetTier { get; private set; }
         public bool NeedsWeapon { get { return HeldWeapon == null || (CurrentWeaponType == WeaponType.Firearm && IsWeaponOutOfAmmo(HeldWeapon)); } }
 
+        private FixedJoint2D weaponJoint;
         private float scanTimer = 0f;
         private float fireCooldownTimer = 0f;
         private float reactionDelayTimer = 0f;
@@ -1375,7 +1331,7 @@ namespace AdvancedSmartAIMod
                 if (limb == null || limb.Person == null) continue;
 
                 PersonBehaviour targetPerson = limb.Person;
-                if (targetPerson.Consciousness <= 0.05f || targetPerson.Health <= 0f) continue;
+                if (targetPerson.Consciousness <= 0.05f || limb.Health <= 0f) continue;
 
                 float dist = Vector2.Distance(myPos, limb.transform.position);
                 if (dist > ai.Config.VisionRange) continue;
@@ -1385,8 +1341,8 @@ namespace AdvancedSmartAIMod
 
                 float score = 120f - dist;
 
-                GripBehaviour grip = targetPerson.GetComponentInChildren<GripBehaviour>();
-                if (grip != null && grip.Holding != null)
+                PhysicalBehaviour pb = col.GetComponent<PhysicalBehaviour>();
+                if (pb != null && pb.beingHeldByGripper)
                 {
                     score += 40f;
                 }
@@ -1439,10 +1395,7 @@ namespace AdvancedSmartAIMod
                 if (col == null || col.transform.root == ai.transform.root) continue;
 
                 PhysicalBehaviour pb = col.GetComponent<PhysicalBehaviour>();
-                if (pb == null) continue;
-
-                GripBehaviour otherGrip = col.GetComponentInParent<GripBehaviour>();
-                if (otherGrip != null && otherGrip.Holding == pb) continue;
+                if (pb == null || pb.beingHeldByGripper) continue;
 
                 WeaponType type = ClassifyWeapon(pb);
                 if (type == WeaponType.None) continue;
@@ -1466,13 +1419,13 @@ namespace AdvancedSmartAIMod
 
         private void UpdateWeaponPickupLogic()
         {
-            if (NearestWeapon == null || ai.Grip == null || HeldWeapon != null) return;
+            if (NearestWeapon == null || HeldWeapon != null || ai.FrontArmLimb == null) return;
 
-            Vector2 handPos = ai.Grip.transform.position;
+            Vector2 handPos = ai.FrontArmLimb.transform.position;
             Vector2 weaponPos = NearestWeapon.transform.position;
             float distToWeapon = Vector2.Distance(handPos, weaponPos);
 
-            if (distToWeapon <= 1.3f)
+            if (distToWeapon <= 1.4f)
             {
                 EquipWeapon(NearestWeapon);
             }
@@ -1480,17 +1433,22 @@ namespace AdvancedSmartAIMod
 
         public void EquipWeapon(PhysicalBehaviour weapon)
         {
-            if (weapon == null || ai.Grip == null) return;
+            if (weapon == null || ai.FrontArmLimb == null || ai.FrontArmRigidbody == null) return;
 
-            try
-            {
-                ai.Grip.Attach(weapon);
-            }
-            catch
-            {
-                weapon.transform.position = ai.Grip.transform.position;
-            }
+            Transform handTransform = ai.FrontArmLimb.transform;
+            weapon.transform.position = handTransform.position;
 
+            // Firmly attach weapon to front arm using standard Unity FixedJoint2D
+            if (weaponJoint != null) UnityEngine.Object.Destroy(weaponJoint);
+            weaponJoint = handTransform.gameObject.AddComponent<FixedJoint2D>();
+            weaponJoint.connectedBody = weapon.rigidbody;
+            weaponJoint.autoConfigureConnectedAnchor = false;
+            weaponJoint.anchor = Vector2.zero;
+            weaponJoint.connectedAnchor = Vector2.zero;
+            weaponJoint.dampingRatio = 1f;
+            weaponJoint.frequency = 0f;
+
+            weapon.beingHeldByGripper = true;
             HeldWeapon = weapon;
             CurrentWeaponType = ClassifyWeapon(weapon);
             dryFireCount = 0;
@@ -1501,13 +1459,11 @@ namespace AdvancedSmartAIMod
 
         private void InspectHeldWeapon()
         {
-            if (ai.Grip == null) return;
-
-            PhysicalBehaviour currentlyHeld = ai.Grip.Holding != null ? ai.Grip.Holding : ai.Grip.GetComponent<PhysicalBehaviour>();
-            if (currentlyHeld != HeldWeapon)
+            if (HeldWeapon != null && weaponJoint == null)
             {
-                HeldWeapon = currentlyHeld;
-                CurrentWeaponType = (HeldWeapon != null) ? ClassifyWeapon(HeldWeapon) : WeaponType.None;
+                HeldWeapon.beingHeldByGripper = false;
+                HeldWeapon = null;
+                CurrentWeaponType = WeaponType.None;
                 dryFireCount = 0;
             }
         }
@@ -1537,7 +1493,7 @@ namespace AdvancedSmartAIMod
                 }
             }
 
-            if (pb.Properties != null && (pb.Properties.Sharp || pb.Properties.Flammable || pb.Properties.Magnetic))
+            if (pb.Properties != null && pb.Properties.Sharp)
             {
                 return WeaponType.Melee;
             }
@@ -1659,17 +1615,19 @@ namespace AdvancedSmartAIMod
 
         public void ThrowWeaponAtTarget()
         {
-            if (HeldWeapon == null || ai.Grip == null || CurrentTarget == null) return;
+            if (HeldWeapon == null || CurrentTarget == null) return;
 
             PhysicalBehaviour weaponToThrow = HeldWeapon;
             Rigidbody2D weaponRb = weaponToThrow.rigidbody;
 
-            try
+            // Detach joint
+            if (weaponJoint != null)
             {
-                ai.Grip.Detach();
+                UnityEngine.Object.Destroy(weaponJoint);
+                weaponJoint = null;
             }
-            catch { }
 
+            weaponToThrow.beingHeldByGripper = false;
             HeldWeapon = null;
             CurrentWeaponType = WeaponType.None;
 
