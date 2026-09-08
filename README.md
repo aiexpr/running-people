@@ -1,52 +1,51 @@
 # Advanced Smart AI NPC - People Playground Mod
+*(Featuring Automatic Compatibility for **Human Tiers: Reforged** & **Beyond Nowhere**)*
 
-An advanced, highly intelligent autonomous NPC mod for **People Playground**. Designed from the ground up to replace vanilla floppy ragdoll behaviors with active balance stabilization, dynamic obstacle navigation, advanced combat tactics (both ranged firearms and melee weapon throwing), customizable in-game Context Menu parameters, and a fully modular Ability Hook API for 3rd-party mod integration.
+An advanced, highly intelligent autonomous NPC mod for **People Playground**. Designed from the ground up to replace vanilla floppy ragdoll behaviors with active balance stabilization, dynamic obstacle navigation, advanced combat tactics (firearms, melee, and tactical weapon throwing), customizable in-game Context Menu parameters, and a zero-dependency **Cross-Mod Compatibility Engine** for **Human Tiers: Reforged** and **Beyond Nowhere**.
 
 ---
 
-## 🌟 Key Features
+## 🌟 Key Features & Improvements
 
-### 1. Core Intelligence, Navigation & Active Balance
-- **Active Proportional-Derivative (PD) Balance Stabilization**: Keeps the ragdoll standing upright with realistic muscle tension and torque stabilization on the Torso, Pelvis, and Head. Prevents premature collapsing or ragdoll tripping.
-- **Dynamic 4-Ray Environmental Scanner**:
-  - **Low Ray**: Detects small ground obstacles, steps, and curbs.
-  - **Mid Ray**: Identifies waist-to-chest-height barricades, crates, and walls.
-  - **Overhead Ray**: Checks ceiling clearance before executing jumps.
-  - **Pit / Ledge Ray**: Casts downward ahead of movement to detect drop-offs, acid pits, or gaps.
-- **Dynamic Jumping & Vaulting**: Automatically vaults over obstacles and leaps across chasms with coordinated leg contraction/extension physics.
+### 1. Active Mass-Adaptive Balance & Locomotion
+- **Mass-Adaptive PD Balance Controller**: Dynamically samples the total ragdoll mass and moment of inertia. Scales proportional-derivative torque gains automatically for vanilla humans, armored characters, giant mutants, and god-tier entities.
+- **Knockdown Recovery & Kip-Up**: Detects when fallen over or pinned, applying rotational spring impulses to immediately return to a stable fighting stance.
+- **Dynamic 5-Ray Environmental Scanner**:
+  - **Low Ray**: Detects small steps and ground obstacles.
+  - **Mid Ray**: Identifies waist-to-chest barricades and walls.
+  - **High Ray & Ledge Mantle**: Detects tall walls (up to 3.2m) and executes an athletic pull-up / mantle over obstacles.
+  - **Overhead Ray**: Verifies vertical clearance before vaulting.
+  - **Pit / Ledge Ray**: Probes downward in front of movement to leap across chasms and hazard zones.
 - **Multi-Tier Unstuck Routine**:
-  - **Tier 1 (Minor)**: Jitters leg torque, executes high-knees stepping, and reverses direction.
+  - **Tier 1 (Minor)**: Jitters leg torques, reverses direction, and executes high-knees stepping.
   - **Tier 2 (Moderate)**: Pushes against contacting geometry and executes a power jump.
-  - **Tier 3 (Severe)**: Delivers an explosive untangle leap to break free from tight corners or heavy debris.
+  - **Tier 3 (Severe)**: Unleashes an explosive untangle leap or triggers modded teleportation/kinetic shockwaves to break free.
 
-### 2. Combat & Generic Weapon Interaction
-- **Target Acquisition & Threat Scoring**: Scans within line-of-sight, prioritizing living armed threats, closing distances based on equipped weapon archetype.
-- **Weapon Foraging & Pickup**: Actively seeks out nearby firearms or melee weapons when unarmed or out of ammo.
-- **Smooth Arm Aiming with Accuracy Variance**: Rotates arm with proportional torque towards target center-of-mass, incorporating spread/sway scaled by the configured accuracy multiplier.
-- **Ranged Gunplay & Reaction Delay**: Actuates firearm triggers via generic `Use` calls, respecting fire rates and reaction times.
+### 2. Combat & Universal Weapon Interaction
+- **Target Threat & Tier Scoring**: Scans line-of-sight, factoring in distance, weapon threat, and enemy **Human Tiers / Beyond Nowhere Tier Level** to prioritize dangerous superhumans.
+- **Dynamic Ballistic Aiming**: Rotates arm with proportional torque towards target center-of-mass, incorporating spread/sway scaled by the configured accuracy multiplier.
 - **Tactical Weapon Throwing**:
   - If a firearm **runs out of ammo**, the AI throws the empty gun at the enemy's head and immediately looks for a new weapon.
   - If holding a **melee weapon** and the enemy is at a distance (> 5.5m) or elevated out of reach, the AI computes a parabolic ballistic trajectory and throws the melee weapon at the enemy!
-- **Universal Modded Weapon Compatibility**: Uses generic reflection and component inspection to identify and operate custom firearms and melee weapons from any other People Playground mod.
+- **Universal Modded Weapon Compatibility**: Dynamically identifies and operates custom firearms, melee weapons, and **Ability Weapons / Relics** from any mod.
 
-### 3. In-Game Context Menu Configuration
-Right-click on the Smart AI (or convert any vanilla human into a Smart AI via the context menu):
+### 3. Automatic Human Tiers & Beyond Nowhere Compatibility
+- **Zero Hard Dependencies**: Operates seamlessly in vanilla People Playground and automatically unlocks cross-mod capabilities if **Human Tiers (Reforged)** or **Beyond Nowhere** are present in your game.
+- **Tier Detection & Auto-Scaling**: Automatically detects if the spawned or converted entity is a Tier 1–8 entity, Awakened, or God-level entity, dynamically scaling its health, speed, and reaction times to match its lore power.
+- **Energy & Superpower Autonomous Triggering**: The AI reads the entity's `Energy` pool and autonomously casts native superpowers (elemental blasts, kinetic forces, teleportation, domain bursts, awakenings) during combat and emergencies.
+- **Ability Weapon Recognition**: Prioritizes supernatural relics, anomaly data banks, and energy weapons from both mods.
+
+### 4. In-Game Context Menu Configuration
+Right-click on the Smart AI (or convert any vanilla or modded human into a Smart AI via the context menu):
 - **Preset Selector**:
-  - `Godlike`: 5.0x Health, 2.0x Speed, 100% Accuracy, 2.5x Reaction Time.
-  - `Elite Soldier`: 2.5x Health, 1.4x Speed, 90% Accuracy, 1.8x Reaction Time.
-  - `Standard AI`: 1.5x Health, 1.15x Speed, 75% Accuracy, 1.2x Reaction Time.
-  - `Grunt / Weakling`: 0.8x Health, 0.85x Speed, 45% Accuracy, 0.7x Reaction Time.
-  - `Civilian`: 0.5x Health, 0.75x Speed, 25% Accuracy, 0.5x Reaction Time (Neutral/Cowardly).
+  - `Godlike`: 5.0x HP, 2.0x Speed, 100% Accuracy, 2.5x Reaction Time.
+  - `Elite Soldier`: 2.5x HP, 1.4x Speed, 90% Accuracy, 1.8x Reaction Time.
+  - `Standard AI`: 1.5x HP, 1.15x Speed, 75% Accuracy, 1.2x Reaction Time.
+  - `Grunt / Weakling`: 0.8x HP, 0.85x Speed, 45% Accuracy, 0.7x Reaction Time.
+  - `Civilian`: 0.5x HP, 0.75x Speed, 25% Accuracy, 0.5x Reaction Time (Neutral/Cowardly).
 - **Attribute Multipliers**: Live cycling of `HealthMultiplier`, `SpeedMultiplier`, `AccuracyMultiplier`, and `ReactionTimeMultiplier`.
 - **Stance Selector**: `Aggressive`, `Defensive`, `Follower`, `Neutral`.
-- **Diagnostics**: Displays real-time health %, target name, held weapon, stuck status, and active abilities.
-
-### 4. Modular Ability System & API Hook
-- **Event Hooks**: Subscribe to `OnHealthChanged`, `OnTargetAcquired`, `OnWeaponEquipped`, `OnWeaponFired`, `OnWeaponThrown`, `OnAbilityTriggered`, `OnStuckLevelChanged`, and `OnAnyAISpawned`.
-- **Built-in Abilities**:
-  - `TacticalDashAbility`: Evasive high-speed leap when target is far or aiming.
-  - `AdrenalineSurgeAbility`: Activates when Health < 40%, regenerating health and granting a 1.75x speed boost.
-  - `KineticShockwaveAbility`: Triggers on severe stuck state or when crowded by multiple enemies, releasing a radial physics shockwave.
+- **Extended Diagnostics**: Displays real-time health %, target name, enemy tier, equipped weapon, Human Tiers Tier & Energy, and active abilities.
 
 ---
 
@@ -55,8 +54,8 @@ Right-click on the Smart AI (or convert any vanilla human into a Smart AI via th
 ```
 running-people/
 ├── mod.json                     # Mod manifest metadata for People Playground
-├── AdvancedSmartAI.cs           # Main mod source code (AI Controller, Balance, Nav, Combat, Abilities, Config)
-├── ExampleAbilityExtension.cs   # Example extension showing how 3rd-party mods register custom abilities
+├── AdvancedSmartAI.cs           # Main mod source code (Controller, Cross-Mod Adapter, Nav, Combat, Abilities)
+├── ExampleAbilityExtension.cs   # Example extension showing 3rd-party mod custom abilities & hooks
 └── README.md                    # Documentation & API reference
 ```
 
@@ -64,83 +63,42 @@ running-people/
 
 ## 🚀 Installation
 
-1. Copy the mod folder (`running-people` or your custom folder name) into your People Playground `Mods` directory:
+1. Copy the mod folder into your People Playground `Mods` directory:
    ```
    People Playground/Mods/AdvancedSmartAI/
    ├── mod.json
    └── AdvancedSmartAI.cs
    ```
 2. Launch **People Playground**.
-3. Open the **Mods** menu on the title screen and ensure **Advanced Smart AI NPC** is enabled (`Active: true`).
-4. Enter any map:
-   - Spawn **Advanced Smart AI** directly from the **Entities** tab.
-   - Or right-click any vanilla human and select **"Convert to Smart AI"**.
+3. Enable **Advanced Smart AI NPC** in the **Mods** menu.
+4. Spawn **Advanced Smart AI** from the **Entities** tab, or right-click any vanilla human, **Human Tiers** character, or **Beyond Nowhere** entity and select **"Convert to Smart AI"**.
 
 ---
 
 ## 🛠️ Ability Mod Compatibility (Developer Guide)
 
-Other modders can easily create custom abilities or listen to AI events in their own C# mods:
-
-### 1. Creating a Custom Ability
-Inherit from `SmartAIAbility` and implement `ShouldTrigger` and `OnActivate`:
-
 ```csharp
 using UnityEngine;
 using AdvancedSmartAIMod;
 
-public class LaserEyeAbility : SmartAIAbility
-{
-    // Name, Cooldown = 8s, Duration = 1.5s
-    public LaserEyeAbility() : base("Laser Eyes", cooldown: 8.0f, duration: 1.5f) { }
-
-    public override bool ShouldTrigger(SmartAIContext context)
-    {
-        // Condition: Trigger when enemy is within 10 units and AI has line of sight
-        return context.TargetEnemy != null && context.TargetDistance < 10f;
-    }
-
-    public override void OnActivate(SmartAIContext context)
-    {
-        ModAPI.Notify($"{context.AI.name} FIRED LASER BEAMS!");
-        // Custom laser projectile / damage logic here
-    }
-}
-```
-
-### 2. Injecting Custom Abilities Globally
-In your mod's `Main()` method, register your ability factory:
-
-```csharp
 public class MyCustomMod
 {
     public static void Main()
     {
-        // Automatically attach LaserEyeAbility to EVERY Smart AI spawned in game!
-        AdvancedSmartAI.RegisterGlobalAbilityFactory(ai => new LaserEyeAbility());
+        // Register custom ability to all Smart AIs
+        AdvancedSmartAI.RegisterGlobalAbilityFactory(ai => new CustomVoidAbility());
+
+        // Listen to AI events
+        AdvancedSmartAI.OnAnyAISpawned += (smartAI) =>
+        {
+            smartAI.OnTargetAcquired += (context, target) =>
+            {
+                int enemyTier = CrossModAdapterEngine.DetectEntityTier(target);
+                Debug.Log($"AI locked onto target {target.name} (Tier: {enemyTier})");
+            };
+        };
     }
 }
-```
-
-### 3. Subscribing to AI Events
-```csharp
-AdvancedSmartAI.OnAnyAISpawned += (smartAI) =>
-{
-    // Hook into health changes (e.g., trigger custom effect when HP < 30%)
-    smartAI.OnHealthChanged += (context, oldHp, newHp) =>
-    {
-        if (newHp < 0.30f)
-        {
-            Debug.Log("AI entered critical damage state!");
-        }
-    };
-
-    // Hook into weapon throwing
-    smartAI.OnWeaponThrown += (context, weapon, velocity) =>
-    {
-        Debug.Log($"AI threw {weapon.name} with velocity {velocity}");
-    };
-};
 ```
 
 ---
@@ -154,12 +112,13 @@ AdvancedSmartAI.OnAnyAISpawned += (smartAI) =>
 | `AccuracyMultiplier` | float | `0.85f` | Controls weapon aiming spread and angular precision |
 | `ReactionTimeMultiplier` | float | `1.4f` | Modulates scan intervals, trigger actuation, and throw velocity |
 | `Stance` | `AIStance` | `Aggressive` | `Aggressive`, `Defensive`, `Follower`, `Neutral` |
-| `EnableActiveBalance` | bool | `true` | Enables PD torque stabilization on Torso, Pelvis, and Head |
+| `EnableActiveBalance` | bool | `true` | Enables adaptive PD torque stabilization on Torso, Pelvis, and Head |
 | `EnableJumpNavigation` | bool | `true` | Enables automatic obstacle and chasm jumping |
+| `EnableLedgeMantling` | bool | `true` | Enables high wall climbing and ledge pull-ups |
 | `EnableWeaponThrowing` | bool | `true` | Enables throwing empty guns and distant melee weapons |
-| `EnableAbilities` | bool | `true` | Enables automated evaluation and activation of abilities |
+| `EnableModdedSuperpowers`| bool | `true` | Enables autonomous superpower usage for Human Tiers & Beyond Nowhere |
 
 ---
 
 ## 📜 License & Credits
-Built for the **People Playground** modding community. Free to use, modify, and extend in custom mods and scenario maps.
+Built for the **People Playground** modding community. Fully compatible with vanilla People Playground, **Human Tiers (Reforged)** by Batrix Studios / Alibarda, and **Beyond Nowhere**.
