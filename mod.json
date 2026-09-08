@@ -1,0 +1,8 @@
+{
+  "Name": "Advanced Smart AI NPC",
+  "Author": "AI Studio",
+  "Description": "Introduces an Advanced Smart AI NPC with dynamic environmental navigation, tactical obstacle jumping, anti-stuck routines, intelligent weapon handling (firearms, melee, and tactical weapon throwing), context menu configuration, and a modular ability hook API.",
+  "Version": "1.0.0",
+  "Active": true,
+  "TargetVersion": "1.27+"
+}
