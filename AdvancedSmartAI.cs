@@ -17,7 +17,7 @@ namespace AdvancedSmartAIMod
             {
                 OriginalItem = ModAPI.FindSpawnable("Human"),
                 NameOverride = "Advanced Smart AI",
-                DescriptionOverride = "An advanced autonomous NPC featuring dynamic obstacle navigation, firearm & melee combat, tactical weapon handling, context menu settings, and automatic compatibility with Human Tiers & Beyond Nowhere.",
+                DescriptionOverride = "An advanced autonomous NPC featuring dynamic obstacle navigation, realistic firearm & melee combat, tactical weapon handling, context menu settings, and an open ability API for mod creators.",
                 CategoryOverride = ModAPI.FindCategory("Entities"),
                 AfterSpawn = (instance) =>
                 {
@@ -165,24 +165,6 @@ namespace AdvancedSmartAIMod
             return new EnergyData(0f, 0f);
         }
 
-        public static bool TryTriggerModdedSuperpower(GameObject root, GameObject target, string powerTypeHint)
-        {
-            if (root == null) return false;
-
-            if (target != null)
-            {
-                root.SendMessage("UsePower", target, SendMessageOptions.DontRequireReceiver);
-                root.SendMessage("Attack", target, SendMessageOptions.DontRequireReceiver);
-            }
-
-            root.SendMessage("UsePower", SendMessageOptions.DontRequireReceiver);
-            root.SendMessage("ActivatePower", SendMessageOptions.DontRequireReceiver);
-            root.SendMessage("ActivateAbility", SendMessageOptions.DontRequireReceiver);
-            root.SendMessage("Cast", SendMessageOptions.DontRequireReceiver);
-            root.SendMessage("Use", SendMessageOptions.DontRequireReceiver);
-            return true;
-        }
-
         public static bool IsModdedAbilityWeapon(GameObject obj)
         {
             if (obj == null) return false;
@@ -228,8 +210,7 @@ namespace AdvancedSmartAIMod
         public bool AllowWeaponPickup = true;
         public bool EnableJumpNavigation = true;
         public bool EnableWeaponThrowing = true;
-        public bool EnableAbilities = true;
-        public bool EnableModdedSuperpowers = true;
+        public bool EnableCustomAbilities = true;
 
         [Header("Tuning Parameters")]
         public float VisionRange = 25f;
@@ -288,7 +269,7 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // SMART AI EXECUTION CONTEXT
+    // SMART AI EXECUTION CONTEXT (ACCESSIBLE TO 3RD-PARTY ABILITIES)
     // =========================================================================================================
     public class SmartAIContext
     {
@@ -323,7 +304,7 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // MODULAR ABILITY SYSTEM BASE CLASS
+    // MODULAR ABILITY SYSTEM BASE CLASS (FOR EXTERNAL MOD CREATORS)
     // =========================================================================================================
     public abstract class SmartAIAbility
     {
@@ -357,31 +338,6 @@ namespace AdvancedSmartAIMod
             LastExecutionTime = Time.time;
             IsActive = Duration > 0f;
             OnActivate(context);
-        }
-    }
-
-    // =========================================================================================================
-    // MODDED SUPERPOWER TRIGGER (PURE SENDMESSAGE, NO RAGDOLL IMPULSES)
-    // =========================================================================================================
-    public class NativeModdedSuperpowerAbility : SmartAIAbility
-    {
-        public NativeModdedSuperpowerAbility() : base("Modded Superpower Trigger", 3.5f, 0.2f) { }
-
-        public override bool ShouldTrigger(SmartAIContext context)
-        {
-            if (!context.Config.EnableModdedSuperpowers) return false;
-            if (context.TargetEnemy == null && context.CurrentStuckLevel == StuckLevel.None) return false;
-
-            return context.IsHumanTiersEntity || context.ModdedEnergy > 5f || context.TargetDistance < 15f;
-        }
-
-        public override void OnActivate(SmartAIContext context)
-        {
-            CrossModAdapterEngine.TryTriggerModdedSuperpower(
-                context.Transform.gameObject,
-                context.TargetEnemy,
-                context.TargetDistance > 8f ? "ranged" : "melee"
-            );
         }
     }
 
@@ -457,8 +413,7 @@ namespace AdvancedSmartAIMod
             ApplyHealthMultiplier();
             RegisterContextMenuOptions();
 
-            AbilitySystem.RegisterAbility(new NativeModdedSuperpowerAbility());
-
+            // Load any 3rd-party custom abilities registered by other mods via GlobalAbilityFactories
             for (int i = 0; i < GlobalAbilityFactories.Count; i++)
             {
                 try
@@ -472,7 +427,7 @@ namespace AdvancedSmartAIMod
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError("[AdvancedSmartAI] Error registering global ability factory: " + ex.Message);
+                    Debug.LogError("[AdvancedSmartAI] Error registering 3rd-party ability: " + ex.Message);
                 }
             }
 
@@ -502,7 +457,6 @@ namespace AdvancedSmartAIMod
                 else if (limbName.Contains("footfront")) FrontFootLimb = limb;
                 else if (limbName.Contains("footback")) BackFootLimb = limb;
 
-                // Reinforce joints against accidental physical damage and dismemberment
                 limb.BreakingThreshold = Mathf.Max(limb.BreakingThreshold, 300f);
             }
         }
@@ -687,7 +641,7 @@ namespace AdvancedSmartAIMod
 
             Navigation.UpdateNavigation(dt);
             Combat.UpdateCombat(dt);
-            if (Config.EnableAbilities)
+            if (Config.EnableCustomAbilities)
             {
                 AbilitySystem.UpdateAbilities(dt);
             }
@@ -935,10 +889,9 @@ namespace AdvancedSmartAIMod
                     break;
 
                 case StuckLevel.Severe:
-                    if (ai.Config.EnableModdedSuperpowers)
-                    {
-                        CrossModAdapterEngine.TryTriggerModdedSuperpower(ai.gameObject, null, "escape");
-                    }
+                    FacingDirection = -FacingDirection;
+                    MoveInput = FacingDirection;
+                    ExecuteJump(true);
                     stuckTimer = 0f;
                     break;
             }
@@ -1133,11 +1086,8 @@ namespace AdvancedSmartAIMod
             float facingDir = ai.Navigation.FacingDirection >= 0 ? 1f : -1f;
             Vector2 torsoPos = ai.TorsoLimb.transform.position;
 
-            // Offset horizontally and at gun level
             Vector2 holdOffset = new Vector2(facingDir * 0.45f, -0.05f);
             weapon.transform.position = torsoPos + holdOffset;
-
-            // Set horizontal rotation (facing right 0 deg, facing left 180 deg)
             weapon.transform.rotation = Quaternion.Euler(0f, 0f, facingDir < 0 ? 180f : 0f);
 
             // 3. Connect via FixedJoint2D to the Torso safely
@@ -1197,7 +1147,6 @@ namespace AdvancedSmartAIMod
         {
             if (HeldWeapon == null || weaponJoint == null) return;
 
-            // Calculate desired aim angle towards target if present, otherwise horizontal
             float desiredAngle = (ai.Navigation.FacingDirection >= 0) ? 0f : 180f;
 
             if (CurrentTarget != null && ai.TorsoLimb != null)
@@ -1207,7 +1156,6 @@ namespace AdvancedSmartAIMod
                 if (ai.Navigation.FacingDirection < 0 && desiredAngle < 0) desiredAngle += 360f;
             }
 
-            // Smoothly update weapon rotation without applying destructive joint torques
             HeldWeapon.transform.rotation = Quaternion.Euler(0f, 0f, desiredAngle);
         }
 
@@ -1403,7 +1351,7 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // MODULAR ABILITY CONTROLLER
+    // MODULAR ABILITY CONTROLLER (OPEN API FOR 3RD-PARTY MODS)
     // =========================================================================================================
     public class AIAbilityController
     {
