@@ -17,7 +17,7 @@ namespace AdvancedSmartAIMod
             {
                 OriginalItem = ModAPI.FindSpawnable("Human"),
                 NameOverride = "Advanced Smart AI",
-                DescriptionOverride = "An advanced autonomous NPC featuring dynamic obstacle navigation, realistic firearm & melee combat, authentic two-handed weapon gripping, context menu settings, and an open ability API for mod creators.",
+                DescriptionOverride = "An advanced autonomous NPC featuring dynamic obstacle navigation, realistic firearm & melee combat, fluid aiming and weapon handling, context menu settings, and an open ability API for mod creators.",
                 CategoryOverride = ModAPI.FindCategory("Entities"),
                 AfterSpawn = (instance) =>
                 {
@@ -379,6 +379,7 @@ namespace AdvancedSmartAIMod
         public Rigidbody2D PelvisRigidbody { get { return PelvisLimb != null && PelvisLimb.PhysicalBehaviour != null ? PelvisLimb.PhysicalBehaviour.rigidbody : null; } }
         public Rigidbody2D HeadRigidbody { get { return HeadLimb != null && HeadLimb.PhysicalBehaviour != null ? HeadLimb.PhysicalBehaviour.rigidbody : null; } }
         public Rigidbody2D FrontArmRigidbody { get { return FrontArmLimb != null && FrontArmLimb.PhysicalBehaviour != null ? FrontArmLimb.PhysicalBehaviour.rigidbody : null; } }
+        public Rigidbody2D UpperArmFrontRigidbody { get { return UpperArmFrontLimb != null && UpperArmFrontLimb.PhysicalBehaviour != null ? UpperArmFrontLimb.PhysicalBehaviour.rigidbody : null; } }
 
         public int DetectedTier { get; private set; }
         public float CurrentEnergy { get; private set; }
@@ -465,7 +466,7 @@ namespace AdvancedSmartAIMod
                 else if (limbName.Contains("footfront")) FrontFootLimb = limb;
                 else if (limbName.Contains("footback")) BackFootLimb = limb;
 
-                limb.BreakingThreshold = Mathf.Max(limb.BreakingThreshold, 300f);
+                limb.BreakingThreshold = Mathf.Max(limb.BreakingThreshold, 500f);
             }
         }
 
@@ -760,7 +761,7 @@ namespace AdvancedSmartAIMod
                 if (Mathf.Abs(weaponDeltaX) > 0.4f)
                 {
                     MoveInput = Mathf.Sign(weaponDeltaX);
-                    FacingDirection = MoveInput;
+                    SetFacingDirection(MoveInput);
                 }
                 return;
             }
@@ -769,7 +770,7 @@ namespace AdvancedSmartAIMod
             {
                 float targetDeltaX = ai.Combat.CurrentTarget.transform.position.x - currentPos.x;
                 float targetDist = Mathf.Abs(targetDeltaX);
-                FacingDirection = Mathf.Sign(targetDeltaX);
+                SetFacingDirection(Mathf.Sign(targetDeltaX));
 
                 if (ai.Config.Stance == AIStance.Aggressive)
                 {
@@ -790,6 +791,18 @@ namespace AdvancedSmartAIMod
                     {
                         MoveInput = -Mathf.Sign(targetDeltaX);
                     }
+                }
+            }
+        }
+
+        private void SetFacingDirection(float newDir)
+        {
+            if (newDir != 0f && Mathf.Sign(newDir) != Mathf.Sign(FacingDirection))
+            {
+                FacingDirection = Mathf.Sign(newDir);
+                if (ai.Combat != null)
+                {
+                    ai.Combat.OnFacingDirectionChanged();
                 }
             }
         }
@@ -888,7 +901,7 @@ namespace AdvancedSmartAIMod
             switch (CurrentStuckLevel)
             {
                 case StuckLevel.Minor:
-                    FacingDirection = -FacingDirection;
+                    SetFacingDirection(-FacingDirection);
                     MoveInput = FacingDirection;
                     break;
 
@@ -897,7 +910,7 @@ namespace AdvancedSmartAIMod
                     break;
 
                 case StuckLevel.Severe:
-                    FacingDirection = -FacingDirection;
+                    SetFacingDirection(-FacingDirection);
                     MoveInput = FacingDirection;
                     ExecuteJump(true);
                     stuckTimer = 0f;
@@ -907,7 +920,7 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // COMBAT & WEAPON CONTROLLER (AUTHENTIC TWO-HANDED GRIP & NATURAL ARM POSING)
+    // COMBAT & WEAPON CONTROLLER (SINGLE-HAND SECURE GRIP, PERFECT ROTATION & ZERO-CONVULSION AIMING)
     // =========================================================================================================
     public class AICombatController
     {
@@ -921,8 +934,8 @@ namespace AdvancedSmartAIMod
         public int TargetTier { get; private set; }
         public bool NeedsWeapon { get { return HeldWeapon == null || (CurrentWeaponType == WeaponType.Firearm && IsWeaponOutOfAmmo(HeldWeapon)); } }
 
-        private FixedJoint2D primaryHandJoint;
-        private FixedJoint2D secondaryHandJoint;
+        private FixedJoint2D weaponHandJoint;
+        private Vector2 activeGripLocalOffset = Vector2.zero;
         private float scanTimer = 0f;
         private float fireCooldownTimer = 0f;
         private float reactionDelayTimer = 0f;
@@ -957,7 +970,7 @@ namespace AdvancedSmartAIMod
 
         public void FixedUpdateCombat(float fixedDeltaTime)
         {
-            AnimateArmAndAim(fixedDeltaTime);
+            MaintainAimAndAimPose(fixedDeltaTime);
         }
 
         private void ScanForTargets()
@@ -1047,7 +1060,7 @@ namespace AdvancedSmartAIMod
                 Collider2D col = items[i];
                 if (col == null || ai.IsOwnLimb(col)) continue;
 
-                // STRICT FILTER: reject any limb, person, or living entity collider
+                // STRICT FILTER: reject any limb, person, or living entity
                 if (col.GetComponent<LimbBehaviour>() != null || col.GetComponentInParent<PersonBehaviour>() != null) continue;
 
                 PhysicalBehaviour pb = col.GetComponent<PhysicalBehaviour>();
@@ -1082,7 +1095,7 @@ namespace AdvancedSmartAIMod
             Vector2 weaponPos = NearestWeapon.transform.position;
             float distToWeapon = Vector2.Distance(handPos, weaponPos);
 
-            if (distToWeapon <= 1.5f)
+            if (distToWeapon <= 1.6f)
             {
                 EquipWeapon(NearestWeapon);
             }
@@ -1098,62 +1111,18 @@ namespace AdvancedSmartAIMod
                 return;
             }
 
-            // 1. Ignore collisions between weapon and all limbs of this AI
+            // 1. Completely ignore collisions between weapon and all limbs of this AI
             IgnoreCollisionsWithAI(weapon, true);
 
-            // 2. Identify holding positions on the weapon (cyan grip points)
-            Vector2 primaryGripLocal = Vector2.zero;
-            Vector2 secondaryGripLocal = Vector2.zero;
-            bool hasSecondaryGrip = false;
-
+            // 2. Identify primary grip point (cyan dot)
+            activeGripLocalOffset = Vector2.zero;
             if (weapon.HoldingPositions != null && weapon.HoldingPositions.Length > 0)
             {
-                primaryGripLocal = (Vector2)weapon.HoldingPositions[0];
-                if (weapon.HoldingPositions.Length > 1)
-                {
-                    secondaryGripLocal = (Vector2)weapon.HoldingPositions[1];
-                    hasSecondaryGrip = true;
-                }
+                activeGripLocalOffset = (Vector2)weapon.HoldingPositions[0];
             }
 
-            float facingDir = ai.Navigation.FacingDirection >= 0 ? 1f : -1f;
-            float baseAngle = (facingDir >= 0) ? 0f : 180f;
-
-            // 3. Orient and position weapon cleanly at the front hand
-            weapon.transform.rotation = Quaternion.Euler(0f, 0f, baseAngle);
-            Vector2 handPos = ai.FrontArmLimb.transform.position;
-            Vector2 worldPrimaryOffset = (Vector2)weapon.transform.TransformVector(primaryGripLocal);
-            weapon.transform.position = handPos - worldPrimaryOffset;
-
-            Rigidbody2D weaponRb = weapon.rigidbody;
-            if (weaponRb != null)
-            {
-                weaponRb.velocity = Vector2.zero;
-                weaponRb.angularVelocity = 0f;
-            }
-
-            // 4. Attach primary hand joint (Front Arm / Hand)
-            if (primaryHandJoint != null) UnityEngine.Object.Destroy(primaryHandJoint);
-            primaryHandJoint = ai.FrontArmLimb.gameObject.AddComponent<FixedJoint2D>();
-            primaryHandJoint.connectedBody = weaponRb;
-            primaryHandJoint.autoConfigureConnectedAnchor = false;
-            primaryHandJoint.anchor = Vector2.zero;
-            primaryHandJoint.connectedAnchor = primaryGripLocal;
-            primaryHandJoint.dampingRatio = 1f;
-            primaryHandJoint.frequency = 0f;
-
-            // 5. Attach secondary hand joint if two-handed weapon
-            if (secondaryHandJoint != null) UnityEngine.Object.Destroy(secondaryHandJoint);
-            if (hasSecondaryGrip && ai.BackArmLimb != null)
-            {
-                secondaryHandJoint = ai.BackArmLimb.gameObject.AddComponent<FixedJoint2D>();
-                secondaryHandJoint.connectedBody = weaponRb;
-                secondaryHandJoint.autoConfigureConnectedAnchor = false;
-                secondaryHandJoint.anchor = Vector2.zero;
-                secondaryHandJoint.connectedAnchor = secondaryGripLocal;
-                secondaryHandJoint.dampingRatio = 1f;
-                secondaryHandJoint.frequency = 0f;
-            }
+            // 3. Cleanly orient and attach weapon to the front arm hand
+            AttachWeaponToHand(weapon);
 
             weapon.beingHeldByGripper = true;
             HeldWeapon = weapon;
@@ -1162,6 +1131,48 @@ namespace AdvancedSmartAIMod
             NearestWeapon = null;
 
             ai.NotifyWeaponEquipped(weapon);
+        }
+
+        private void AttachWeaponToHand(PhysicalBehaviour weapon)
+        {
+            if (weapon == null || ai.FrontArmLimb == null) return;
+
+            float facing = ai.Navigation.FacingDirection >= 0 ? 1f : -1f;
+            float baseAngle = (facing >= 0) ? 0f : 180f;
+
+            // Set weapon rotation to point horizontally forward
+            weapon.transform.rotation = Quaternion.Euler(0f, 0f, baseAngle);
+
+            // Align weapon grip position with the hand
+            Vector2 handPos = ai.FrontArmLimb.transform.position;
+            Vector2 worldGripOffset = (Vector2)weapon.transform.TransformVector(activeGripLocalOffset);
+            weapon.transform.position = handPos - worldGripOffset;
+
+            Rigidbody2D weaponRb = weapon.rigidbody;
+            if (weaponRb != null)
+            {
+                weaponRb.velocity = Vector2.zero;
+                weaponRb.angularVelocity = 0f;
+            }
+
+            // Attach single secure FixedJoint2D to Front Arm (avoids overconstrained dual-joint convulsions)
+            if (weaponHandJoint != null) UnityEngine.Object.Destroy(weaponHandJoint);
+            weaponHandJoint = ai.FrontArmLimb.gameObject.AddComponent<FixedJoint2D>();
+            weaponHandJoint.connectedBody = weaponRb;
+            weaponHandJoint.autoConfigureConnectedAnchor = false;
+            weaponHandJoint.anchor = Vector2.zero;
+            weaponHandJoint.connectedAnchor = activeGripLocalOffset;
+            weaponHandJoint.dampingRatio = 1f;
+            weaponHandJoint.frequency = 0f;
+        }
+
+        public void OnFacingDirectionChanged()
+        {
+            // When turning left/right, smoothly re-orient the held weapon so it faces forward
+            if (HeldWeapon != null && weaponHandJoint != null)
+            {
+                AttachWeaponToHand(HeldWeapon);
+            }
         }
 
         private void IgnoreCollisionsWithAI(PhysicalBehaviour weapon, bool ignore)
@@ -1190,55 +1201,48 @@ namespace AdvancedSmartAIMod
             }
         }
 
-        private void AnimateArmAndAim(float fixedDeltaTime)
+        private void MaintainAimAndAimPose(float fixedDeltaTime)
         {
             if (HeldWeapon == null || ai.FrontArmLimb == null) return;
 
             float facing = (ai.Navigation.FacingDirection >= 0) ? 1f : -1f;
             float desiredAngle = (facing >= 0) ? 0f : 180f;
 
-            if (CurrentTarget != null && ai.TorsoLimb != null)
+            if (CurrentTarget != null)
             {
                 Vector2 diff = (Vector2)CurrentTarget.transform.position - (Vector2)ai.FrontArmLimb.transform.position;
                 desiredAngle = Mathf.Atan2(diff.y, diff.x) * Mathf.Rad2Deg;
             }
 
-            // Restrict aiming to natural forward humanoid angles
+            // Restrict aim to natural humanoid forward angles
             if (facing >= 0)
             {
-                desiredAngle = Mathf.Clamp(desiredAngle, -40f, 50f);
+                desiredAngle = Mathf.Clamp(desiredAngle, -40f, 45f);
             }
             else
             {
-                if (desiredAngle < 0) desiredAngle += 360f;
-                desiredAngle = Mathf.Clamp(desiredAngle, 130f, 220f);
+                if (desiredAngle < 0f) desiredAngle += 360f;
+                desiredAngle = Mathf.Clamp(desiredAngle, 135f, 220f);
             }
 
-            // Smooth, gentle arm lifting torque (never rips joints or snaps limbs)
-            float currentAngle = ai.FrontArmLimb.transform.eulerAngles.z;
-            float angleDelta = Mathf.DeltaAngle(currentAngle, desiredAngle);
-            float armTorque = Mathf.Clamp(angleDelta * 0.35f, -2.5f, 2.5f);
+            // Smooth weapon rotation alignment
+            HeldWeapon.transform.rotation = Quaternion.Euler(0f, 0f, desiredAngle);
 
-            if (ai.FrontArmRigidbody != null)
+            // Gently raise upper arm to match aiming angle without bone-snapping torques
+            if (ai.UpperArmFrontRigidbody != null)
             {
-                ai.FrontArmRigidbody.AddTorque(armTorque - (ai.FrontArmRigidbody.angularVelocity * 0.05f), ForceMode2D.Force);
-            }
-
-            if (ai.UpperArmFrontLimb != null && ai.UpperArmFrontLimb.PhysicalBehaviour != null && ai.UpperArmFrontLimb.PhysicalBehaviour.rigidbody != null)
-            {
-                ai.UpperArmFrontLimb.PhysicalBehaviour.rigidbody.AddTorque(armTorque * 0.6f, ForceMode2D.Force);
+                float currentArmAngle = ai.UpperArmFrontLimb.transform.eulerAngles.z;
+                float angleDelta = Mathf.DeltaAngle(currentArmAngle, desiredAngle);
+                float softTorque = Mathf.Clamp(angleDelta * 0.15f, -1.2f, 1.2f);
+                ai.UpperArmFrontRigidbody.AddTorque(softTorque - (ai.UpperArmFrontRigidbody.angularVelocity * 0.04f), ForceMode2D.Force);
             }
         }
 
         private void InspectHeldWeapon()
         {
-            if (HeldWeapon != null && primaryHandJoint == null)
+            if (HeldWeapon != null && weaponHandJoint == null)
             {
-                if (secondaryHandJoint != null)
-                {
-                    UnityEngine.Object.Destroy(secondaryHandJoint);
-                    secondaryHandJoint = null;
-                }
+                IgnoreCollisionsWithAI(HeldWeapon, false);
                 HeldWeapon.beingHeldByGripper = false;
                 HeldWeapon = null;
                 CurrentWeaponType = WeaponType.None;
@@ -1365,11 +1369,10 @@ namespace AdvancedSmartAIMod
             {
                 HeldWeapon.SendMessage("Use", SendMessageOptions.DontRequireReceiver);
 
-                // Gentle natural melee swing motion
                 if (ai.FrontArmRigidbody != null)
                 {
                     float facing = ai.Navigation.FacingDirection >= 0 ? 1f : -1f;
-                    float swing = Mathf.Sin(Time.time * 9f) * 2.5f * facing;
+                    float swing = Mathf.Sin(Time.time * 8f) * 1.5f * facing;
                     ai.FrontArmRigidbody.AddTorque(swing, ForceMode2D.Force);
                 }
             }
@@ -1403,18 +1406,13 @@ namespace AdvancedSmartAIMod
             PhysicalBehaviour weaponToThrow = HeldWeapon;
             Rigidbody2D weaponRb = weaponToThrow.rigidbody;
 
-            if (primaryHandJoint != null)
+            if (weaponHandJoint != null)
             {
-                UnityEngine.Object.Destroy(primaryHandJoint);
-                primaryHandJoint = null;
+                UnityEngine.Object.Destroy(weaponHandJoint);
+                weaponHandJoint = null;
             }
 
-            if (secondaryHandJoint != null)
-            {
-                UnityEngine.Object.Destroy(secondaryHandJoint);
-                secondaryHandJoint = null;
-            }
-
+            IgnoreCollisionsWithAI(weaponToThrow, false);
             weaponToThrow.beingHeldByGripper = false;
             HeldWeapon = null;
             CurrentWeaponType = WeaponType.None;
