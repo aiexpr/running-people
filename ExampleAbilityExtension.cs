@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+<<<<<<< HEAD
 using AdvancedSmartAIMod;
 
 namespace AdvancedSmartAIMod.Examples
@@ -7,11 +8,19 @@ namespace AdvancedSmartAIMod.Examples
     // =========================================================================================================
     // 3RD-PARTY MOD EXTENSION EXAMPLE: CUSTOM ABILITIES & CROSS-MOD SYNERGY
     // Compatible with vanilla People Playground, Human Tiers (Reforged), and Beyond Nowhere
+=======
+
+namespace AdvancedSmartAIMod
+{
+    // =========================================================================================================
+    // EXAMPLE 3RD-PARTY ABILITY EXTENSION (SAFE PASSIVE & STATUS ABILITIES)
+>>>>>>> 0b62996 (Fix weapon holding alignment, ignore self-collisions to prevent crushing damage, and remove physics abilities)
     // =========================================================================================================
     public class ExampleAbilityExtensionMod
     {
         public static void Main()
         {
+<<<<<<< HEAD
             // -------------------------------------------------------------------------------------------------
             // METHOD 1: REGISTER GLOBAL ABILITY FACTORIES
             // -------------------------------------------------------------------------------------------------
@@ -62,25 +71,59 @@ namespace AdvancedSmartAIMod.Examples
         public override bool ShouldTrigger(SmartAIContext context)
         {
             return context.HealthPercent < 0.50f && context.TargetEnemy != null;
+=======
+            // Register an example passive ability with the Advanced Smart AI global factory
+            AdvancedSmartAI.RegisterGlobalAbilityFactory((ai) => new PassiveCellularRegenerationAbility());
+
+            ModAPI.Notify("Advanced Smart AI: Example Ability Extension loaded!");
+        }
+    }
+
+    /// <summary>
+    /// A safe passive regeneration ability that gently mends injured limbs over time without applying physics impulses.
+    /// </summary>
+    public class PassiveCellularRegenerationAbility : SmartAIAbility
+    {
+        public PassiveCellularRegenerationAbility() : base("Passive Cellular Regeneration", 10.0f, 3.0f) { }
+
+        public override bool ShouldTrigger(SmartAIContext context)
+        {
+            return context.HealthPercent < 0.85f;
+>>>>>>> 0b62996 (Fix weapon holding alignment, ignore self-collisions to prevent crushing damage, and remove physics abilities)
         }
 
         public override void OnActivate(SmartAIContext context)
         {
+<<<<<<< HEAD
             ModAPI.Notify(context.AI.name + " ACTIVATED ENERGY SHIELD!");
+=======
+            ModAPI.Notify(context.AI.name + " initiated Cellular Regeneration.");
+        }
+
+        public override void OnUpdate(SmartAIContext context, float deltaTime)
+        {
+>>>>>>> 0b62996 (Fix weapon holding alignment, ignore self-collisions to prevent crushing damage, and remove physics abilities)
             if (context.Person != null && context.Person.Limbs != null)
             {
                 LimbBehaviour[] limbs = context.Person.Limbs;
                 for (int i = 0; i < limbs.Length; i++)
                 {
                     LimbBehaviour limb = limbs[i];
+<<<<<<< HEAD
                     if (limb != null)
                     {
                         limb.Health += 35f;
+=======
+                    if (limb != null && limb.Health < (100f * context.Config.HealthMultiplier))
+                    {
+                        limb.Health = Mathf.Min(100f * context.Config.HealthMultiplier, limb.Health + (8f * deltaTime));
+>>>>>>> 0b62996 (Fix weapon holding alignment, ignore self-collisions to prevent crushing damage, and remove physics abilities)
                         limb.Numbness = 0f;
                     }
                 }
             }
         }
+<<<<<<< HEAD
 
         public override void OnUpdate(SmartAIContext context, float deltaTime)
         {
@@ -174,5 +217,7 @@ namespace AdvancedSmartAIMod.Examples
 
             ModAPI.Notify(context.AI.name + " UNLEASHED TIERED VOID BURST!");
         }
+=======
+>>>>>>> 0b62996 (Fix weapon holding alignment, ignore self-collisions to prevent crushing damage, and remove physics abilities)
     }
 }

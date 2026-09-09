@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -14,12 +13,11 @@ namespace AdvancedSmartAIMod
     {
         public static void Main()
         {
-            // Register the custom Smart AI entity under the "Entities" category
             ModAPI.Register(new Modification
             {
                 OriginalItem = ModAPI.FindSpawnable("Human"),
                 NameOverride = "Advanced Smart AI",
-                DescriptionOverride = "An advanced autonomous NPC featuring dynamic obstacle navigation, generic firearm & melee combat, tactical weapon throwing, context menu settings, modular ability hooks, and automatic compatibility with Human Tiers & Beyond Nowhere.",
+                DescriptionOverride = "An advanced autonomous NPC featuring dynamic obstacle navigation, firearm & melee combat, tactical weapon handling, context menu settings, and automatic compatibility with Human Tiers & Beyond Nowhere.",
                 CategoryOverride = ModAPI.FindCategory("Entities"),
                 AfterSpawn = (instance) =>
                 {
@@ -28,7 +26,7 @@ namespace AdvancedSmartAIMod
                 }
             });
 
-            ModAPI.Notify("Advanced Smart AI Mod initialized (Human Tiers & Beyond Nowhere auto-compatibility active)!");
+            ModAPI.Notify("Advanced Smart AI Mod initialized!");
         }
     }
 
@@ -38,36 +36,36 @@ namespace AdvancedSmartAIMod
 
     public enum AIStance
     {
-        Aggressive, // Actively hunts enemies, seeks weapons, attacks on sight
-        Defensive,  // Holds ground, arms itself, attacks only when approached or fired upon
-        Follower,   // Follows the nearest friendly/player-designated human, protects them
-        Neutral     // Wanders peacefully unless harmed
+        Aggressive, // Actively seeks weapons and attacks enemies
+        Defensive,  // Arms itself, attacks only when approached or fired upon
+        Follower,   // Follows nearest friendly humanoid
+        Neutral     // Wanders peacefully unless attacked
     }
 
     public enum AIPreset
     {
-        Godlike,       // 5.0x HP, 2.0x Speed, 100% Accuracy, 2.5x Reaction Time
-        EliteSoldier,  // 2.5x HP, 1.4x Speed, 90% Accuracy, 1.8x Reaction Time
+        Godlike,       // 5.0x HP, 1.8x Speed, 100% Accuracy, 2.2x Reaction Time
+        EliteSoldier,  // 2.5x HP, 1.35x Speed, 90% Accuracy, 1.6x Reaction Time
         StandardAI,    // 1.5x HP, 1.15x Speed, 75% Accuracy, 1.2x Reaction Time
         GruntWeakling, // 0.8x HP, 0.85x Speed, 45% Accuracy, 0.7x Reaction Time
-        Civilian       // 0.5x HP, 0.75x Speed, 25% Accuracy, 0.5x Reaction Time (Cowardly)
+        Civilian       // 0.5x HP, 0.75x Speed, 25% Accuracy, 0.5x Reaction Time (Neutral)
     }
 
     public enum StuckLevel
     {
         None,
-        Minor,    // Mild snag or low obstacle obstruction
-        Moderate, // Stuck against a wall, barrier, or pile of debris
-        Severe    // Trapped in a tight corner, under heavy prop, or inverted
+        Minor,
+        Moderate,
+        Severe
     }
 
     public enum WeaponType
     {
         None,
-        Firearm,       // Pistols, rifles, shotguns, energy blasters, modded guns
-        Melee,         // Swords, knives, axes, batons, blunt objects
-        AbilityWeapon, // Human Tiers / Beyond Nowhere magical/supernatural weapons
-        Throwable      // Grenades, rocks, or improvised projectiles
+        Firearm,
+        Melee,
+        AbilityWeapon,
+        Throwable
     }
 
     public struct EnergyData
@@ -220,7 +218,7 @@ namespace AdvancedSmartAIMod
     {
         [Header("Attribute Multipliers")]
         [Range(0.1f, 10.0f)] public float HealthMultiplier = 1.8f;
-        [Range(0.2f, 3.0f)]  public float MovementSpeedMultiplier = 1.2f;
+        [Range(0.2f, 3.0f)]  public float MovementSpeedMultiplier = 1.15f;
         [Range(0.1f, 1.0f)]  public float AccuracyMultiplier = 0.85f;
         [Range(0.1f, 5.0f)]  public float ReactionTimeMultiplier = 1.3f;
 
@@ -229,16 +227,15 @@ namespace AdvancedSmartAIMod
         public AIPreset CurrentPreset = AIPreset.StandardAI;
         public bool AllowWeaponPickup = true;
         public bool EnableJumpNavigation = true;
-        public bool EnableLedgeMantling = true;
         public bool EnableWeaponThrowing = true;
         public bool EnableAbilities = true;
         public bool EnableModdedSuperpowers = true;
 
         [Header("Tuning Parameters")]
         public float VisionRange = 25f;
-        public float WeaponSearchRadius = 12f;
-        public float MeleeRange = 2.2f;
-        public float ThrowThresholdDistance = 5.0f;
+        public float WeaponSearchRadius = 10f;
+        public float MeleeRange = 2.0f;
+        public float ThrowThresholdDistance = 6.0f;
 
         public void ApplyPreset(AIPreset preset, AdvancedSmartAI ai)
         {
@@ -247,14 +244,14 @@ namespace AdvancedSmartAIMod
             {
                 case AIPreset.Godlike:
                     HealthMultiplier = 5.0f;
-                    MovementSpeedMultiplier = 1.8f;
+                    MovementSpeedMultiplier = 1.6f;
                     AccuracyMultiplier = 1.0f;
                     ReactionTimeMultiplier = 2.2f;
                     Stance = AIStance.Aggressive;
                     break;
                 case AIPreset.EliteSoldier:
                     HealthMultiplier = 2.5f;
-                    MovementSpeedMultiplier = 1.35f;
+                    MovementSpeedMultiplier = 1.3f;
                     AccuracyMultiplier = 0.90f;
                     ReactionTimeMultiplier = 1.6f;
                     Stance = AIStance.Aggressive;
@@ -364,124 +361,11 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // BUILT-IN ABILITIES (SAFE & FLUID PHYSICS)
+    // MODDED SUPERPOWER TRIGGER (PURE SENDMESSAGE, NO RAGDOLL IMPULSES)
     // =========================================================================================================
-    public class TacticalDashAbility : SmartAIAbility
-    {
-        public TacticalDashAbility() : base("Tactical Dash", 6.0f, 0.25f) { }
-
-        public override bool ShouldTrigger(SmartAIContext context)
-        {
-            if (context.TargetEnemy == null) return false;
-            return context.TargetDistance > 8.0f || context.CurrentStuckLevel == StuckLevel.Moderate;
-        }
-
-        public override void OnActivate(SmartAIContext context)
-        {
-            if (context.AI.TorsoRigidbody == null) return;
-
-            float moveDir = context.Combat.CurrentTarget != null
-                ? Mathf.Sign(context.Combat.CurrentTarget.transform.position.x - context.Position.x)
-                : context.Navigation.FacingDirection;
-
-            Vector2 dashVector = new Vector2(moveDir * 6f, 2f);
-            context.AI.TorsoRigidbody.AddForce(dashVector, ForceMode2D.Impulse);
-
-            ModAPI.Notify(context.AI.name + " performed Tactical Dash!");
-        }
-    }
-
-    public class AdrenalineSurgeAbility : SmartAIAbility
-    {
-        private float originalSpeedMultiplier;
-
-        public AdrenalineSurgeAbility() : base("Adrenaline Surge", 18f, 5.0f) { }
-
-        public override bool ShouldTrigger(SmartAIContext context)
-        {
-            return context.HealthPercent < 0.40f && context.TargetEnemy != null;
-        }
-
-        public override void OnActivate(SmartAIContext context)
-        {
-            originalSpeedMultiplier = context.Config.MovementSpeedMultiplier;
-            context.Config.MovementSpeedMultiplier *= 1.4f;
-            ModAPI.Notify(context.AI.name + " activated ADRENALINE SURGE!");
-        }
-
-        public override void OnUpdate(SmartAIContext context, float deltaTime)
-        {
-            if (context.Person != null && context.Person.Limbs != null)
-            {
-                LimbBehaviour[] limbs = context.Person.Limbs;
-                for (int i = 0; i < limbs.Length; i++)
-                {
-                    LimbBehaviour limb = limbs[i];
-                    if (limb != null && limb.Health < 100f)
-                    {
-                        limb.Health = Mathf.Min(100f, limb.Health + (15f * deltaTime));
-                        limb.Numbness = 0f;
-                    }
-                }
-            }
-        }
-
-        public override void OnDeactivate(SmartAIContext context)
-        {
-            base.OnDeactivate(context);
-            context.Config.MovementSpeedMultiplier = originalSpeedMultiplier;
-        }
-    }
-
-    public class KineticShockwaveAbility : SmartAIAbility
-    {
-        public KineticShockwaveAbility() : base("Kinetic Shockwave", 12f, 0.1f) { }
-
-        public override bool ShouldTrigger(SmartAIContext context)
-        {
-            if (context.CurrentStuckLevel == StuckLevel.Severe) return true;
-
-            Collider2D[] nearby = Physics2D.OverlapCircleAll(context.Position, 2.5f);
-            HashSet<PersonBehaviour> enemyPersons = new HashSet<PersonBehaviour>();
-
-            for (int i = 0; i < nearby.Length; i++)
-            {
-                Collider2D col = nearby[i];
-                if (col == null || context.AI.IsOwnLimb(col)) continue;
-
-                LimbBehaviour limb = col.GetComponent<LimbBehaviour>();
-                if (limb != null && limb.Person != null && limb.Person != context.Person && limb.Person.Consciousness > 0.1f)
-                {
-                    enemyPersons.Add(limb.Person);
-                }
-            }
-            return enemyPersons.Count >= 2;
-        }
-
-        public override void OnActivate(SmartAIContext context)
-        {
-            Collider2D[] affected = Physics2D.OverlapCircleAll(context.Position, 3.5f);
-            for (int i = 0; i < affected.Length; i++)
-            {
-                Collider2D col = affected[i];
-                if (col == null || context.AI.IsOwnLimb(col)) continue;
-
-                Rigidbody2D rb = col.attachedRigidbody;
-                if (rb != null)
-                {
-                    Vector2 diff = (Vector2)col.transform.position - context.Position;
-                    float dist = Mathf.Max(0.8f, diff.magnitude);
-                    Vector2 forceDir = diff.normalized;
-                    rb.AddForce(forceDir * (8f / dist), ForceMode2D.Impulse);
-                }
-            }
-            ModAPI.Notify(context.AI.name + " unleashed Kinetic Shockwave!");
-        }
-    }
-
     public class NativeModdedSuperpowerAbility : SmartAIAbility
     {
-        public NativeModdedSuperpowerAbility() : base("Modded Superpower Trigger", 4.0f, 0.2f) { }
+        public NativeModdedSuperpowerAbility() : base("Modded Superpower Trigger", 3.5f, 0.2f) { }
 
         public override bool ShouldTrigger(SmartAIContext context)
         {
@@ -573,9 +457,6 @@ namespace AdvancedSmartAIMod
             ApplyHealthMultiplier();
             RegisterContextMenuOptions();
 
-            AbilitySystem.RegisterAbility(new TacticalDashAbility());
-            AbilitySystem.RegisterAbility(new AdrenalineSurgeAbility());
-            AbilitySystem.RegisterAbility(new KineticShockwaveAbility());
             AbilitySystem.RegisterAbility(new NativeModdedSuperpowerAbility());
 
             for (int i = 0; i < GlobalAbilityFactories.Count; i++)
@@ -621,8 +502,8 @@ namespace AdvancedSmartAIMod
                 else if (limbName.Contains("footfront")) FrontFootLimb = limb;
                 else if (limbName.Contains("footback")) BackFootLimb = limb;
 
-                // Reinforce joints against accidental physics snapping
-                limb.BreakingThreshold = Mathf.Max(limb.BreakingThreshold, 200f);
+                // Reinforce joints against accidental physical damage and dismemberment
+                limb.BreakingThreshold = Mathf.Max(limb.BreakingThreshold, 300f);
             }
         }
 
@@ -657,8 +538,8 @@ namespace AdvancedSmartAIMod
             {
                 float tierMultiplier = 1f + (DetectedTier * 0.45f);
                 Config.HealthMultiplier = Mathf.Max(Config.HealthMultiplier, tierMultiplier);
-                Config.MovementSpeedMultiplier = Mathf.Max(Config.MovementSpeedMultiplier, 1.0f + (DetectedTier * 0.12f));
-                Config.ReactionTimeMultiplier = Mathf.Max(Config.ReactionTimeMultiplier, 1.0f + (DetectedTier * 0.20f));
+                Config.MovementSpeedMultiplier = Mathf.Max(Config.MovementSpeedMultiplier, 1.0f + (DetectedTier * 0.10f));
+                Config.ReactionTimeMultiplier = Mathf.Max(Config.ReactionTimeMultiplier, 1.0f + (DetectedTier * 0.15f));
                 Config.AccuracyMultiplier = Mathf.Clamp(0.7f + (DetectedTier * 0.05f), 0.7f, 1.0f);
             }
         }
@@ -738,10 +619,10 @@ namespace AdvancedSmartAIMod
             pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_speed",
                 "Cycle Speed [" + Config.MovementSpeedMultiplier + "x]",
-                "Scale AI movement speed (0.75x, 1.0x, 1.25x, 1.6x, 2.2x).",
+                "Scale AI movement speed (0.75x, 1.0x, 1.15x, 1.4x, 1.8x).",
                 new UnityAction[] { () =>
                 {
-                    float[] speedSteps = new float[] { 0.75f, 1.0f, 1.25f, 1.6f, 2.2f };
+                    float[] speedSteps = new float[] { 0.75f, 1.0f, 1.15f, 1.4f, 1.8f };
                     int currentIndex = Array.FindIndex(speedSteps, s => Mathf.Approximately(s, Config.MovementSpeedMultiplier));
                     int nextIndex = (currentIndex + 1) % speedSteps.Length;
                     Config.MovementSpeedMultiplier = speedSteps[nextIndex];
@@ -766,7 +647,7 @@ namespace AdvancedSmartAIMod
             pb.ContextMenuOptions.Buttons.Add(new ContextMenuButton(
                 "smart_ai_stats",
                 "Inspect AI Diagnostics",
-                "Display current health, combat target, equipped weapon, tier stats, and active abilities.",
+                "Display current health, combat target, equipped weapon, tier stats.",
                 new UnityAction[] { () =>
                 {
                     string targetName = Combat.CurrentTarget != null ? Combat.CurrentTarget.name : "None";
@@ -858,7 +739,7 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // CORE NAVIGATION & LOCOMOTION (USES NATIVE PPG WALKING ENGINE)
+    // CORE NAVIGATION & LOCOMOTION
     // =========================================================================================================
     public class AINavigationController
     {
@@ -869,7 +750,7 @@ namespace AdvancedSmartAIMod
         public StuckLevel CurrentStuckLevel { get; private set; }
 
         private float lastJumpTime = -999f;
-        private float jumpCooldown = 1.2f;
+        private float jumpCooldown = 1.5f;
         private bool isGrounded = true;
 
         private Vector2 lastPosition;
@@ -894,7 +775,6 @@ namespace AdvancedSmartAIMod
             ScanEnvironmentAndObstacles();
             UpdateUnstuckRoutine(deltaTime);
 
-            // Set the entity's native PPG walking direction (smooth, organic walking that never snaps joints)
             if (ai.Person != null)
             {
                 ai.Person.DesiredWalkingDirection = MoveInput * Mathf.Clamp(ai.Config.MovementSpeedMultiplier, 0.5f, 2.0f);
@@ -903,7 +783,6 @@ namespace AdvancedSmartAIMod
 
         public void FixedUpdateNavigation(float fixedDeltaTime)
         {
-            // Locomotion handled smoothly via Person.DesiredWalkingDirection
         }
 
         private void DetermineMovementGoal()
@@ -916,7 +795,7 @@ namespace AdvancedSmartAIMod
             if (ai.Config.AllowWeaponPickup && ai.Combat.NeedsWeapon && ai.Combat.NearestWeapon != null)
             {
                 float weaponDeltaX = ai.Combat.NearestWeapon.transform.position.x - currentPos.x;
-                if (Mathf.Abs(weaponDeltaX) > 0.6f)
+                if (Mathf.Abs(weaponDeltaX) > 0.4f)
                 {
                     MoveInput = Mathf.Sign(weaponDeltaX);
                     FacingDirection = MoveInput;
@@ -932,20 +811,20 @@ namespace AdvancedSmartAIMod
 
                 if (ai.Config.Stance == AIStance.Aggressive)
                 {
-                    float preferredDistance = (ai.Combat.CurrentWeaponType == WeaponType.Firearm) ? 6.5f : 1.3f;
+                    float preferredDistance = (ai.Combat.CurrentWeaponType == WeaponType.Firearm) ? 6.0f : 1.2f;
 
-                    if (targetDist > preferredDistance + 0.5f)
+                    if (targetDist > preferredDistance + 0.4f)
                     {
                         MoveInput = Mathf.Sign(targetDeltaX);
                     }
-                    else if (targetDist < preferredDistance - 1.5f && ai.Combat.CurrentWeaponType == WeaponType.Firearm)
+                    else if (targetDist < preferredDistance - 1.2f && ai.Combat.CurrentWeaponType == WeaponType.Firearm)
                     {
                         MoveInput = -Mathf.Sign(targetDeltaX);
                     }
                 }
                 else if (ai.Config.Stance == AIStance.Defensive)
                 {
-                    if (targetDist < 4.5f)
+                    if (targetDist < 4.0f)
                     {
                         MoveInput = -Mathf.Sign(targetDeltaX);
                     }
@@ -968,17 +847,17 @@ namespace AdvancedSmartAIMod
             Vector2 originFeet = ai.PelvisLimb != null ? (Vector2)ai.PelvisLimb.transform.position + (Vector2.down * 0.6f) : originWaist + (Vector2.down * 0.6f);
             Vector2 moveDir = new Vector2(FacingDirection, 0f);
 
-            RaycastHit2D lowObstacle = Physics2D.Raycast(originFeet, moveDir, 1.4f, LayerMask.GetMask("Default", "Objects"));
+            RaycastHit2D lowObstacle = Physics2D.Raycast(originFeet, moveDir, 1.3f, LayerMask.GetMask("Default", "Objects"));
             bool lowBlocked = lowObstacle.collider != null && !ai.IsOwnLimb(lowObstacle.collider);
 
-            RaycastHit2D midObstacle = Physics2D.Raycast(originWaist, moveDir, 1.8f, LayerMask.GetMask("Default", "Objects"));
+            RaycastHit2D midObstacle = Physics2D.Raycast(originWaist, moveDir, 1.6f, LayerMask.GetMask("Default", "Objects"));
             bool midBlocked = midObstacle.collider != null && !ai.IsOwnLimb(midObstacle.collider);
 
-            RaycastHit2D ceilingCheck = Physics2D.Raycast(originWaist + (Vector2.up * 0.8f), Vector2.up, 1.6f, LayerMask.GetMask("Default", "Objects"));
+            RaycastHit2D ceilingCheck = Physics2D.Raycast(originWaist + (Vector2.up * 0.8f), Vector2.up, 1.5f, LayerMask.GetMask("Default", "Objects"));
             bool ceilingBlocked = ceilingCheck.collider != null && !ai.IsOwnLimb(ceilingCheck.collider);
 
-            Vector2 pitProbePos = originFeet + (moveDir * 1.6f);
-            RaycastHit2D pitCheck = Physics2D.Raycast(pitProbePos, Vector2.down, 2.6f, LayerMask.GetMask("Default", "Objects"));
+            Vector2 pitProbePos = originFeet + (moveDir * 1.5f);
+            RaycastHit2D pitCheck = Physics2D.Raycast(pitProbePos, Vector2.down, 2.5f, LayerMask.GetMask("Default", "Objects"));
             bool gapDetected = (pitCheck.collider == null);
 
             if ((lowBlocked || midBlocked || gapDetected) && !ceilingBlocked)
@@ -993,12 +872,11 @@ namespace AdvancedSmartAIMod
 
             lastJumpTime = Time.time;
 
-            float jumpForce = highJump ? 7.5f : 5.5f;
-            float forwardForce = 2.5f * FacingDirection;
+            float jumpForce = highJump ? 6.0f : 4.5f;
+            float forwardForce = 1.5f * FacingDirection;
 
             Vector2 impulse = new Vector2(forwardForce, jumpForce);
             ai.TorsoRigidbody.AddForce(impulse, ForceMode2D.Impulse);
-            if (ai.PelvisRigidbody != null) ai.PelvisRigidbody.AddForce(impulse * 0.8f, ForceMode2D.Impulse);
         }
 
         private void UpdateUnstuckRoutine(float deltaTime)
@@ -1015,7 +893,7 @@ namespace AdvancedSmartAIMod
                 return;
             }
 
-            if (Mathf.Abs(MoveInput) > 0.1f && displacement < 0.12f * deltaTime)
+            if (Mathf.Abs(MoveInput) > 0.1f && displacement < 0.10f * deltaTime)
             {
                 stuckTimer += deltaTime;
             }
@@ -1061,10 +939,6 @@ namespace AdvancedSmartAIMod
                     {
                         CrossModAdapterEngine.TryTriggerModdedSuperpower(ai.gameObject, null, "escape");
                     }
-                    if (ai.TorsoRigidbody != null)
-                    {
-                        ai.TorsoRigidbody.AddForce(new Vector2(UnityEngine.Random.Range(-1f, 1f) * 4f, 6f), ForceMode2D.Impulse);
-                    }
                     stuckTimer = 0f;
                     break;
             }
@@ -1072,7 +946,7 @@ namespace AdvancedSmartAIMod
     }
 
     // =========================================================================================================
-    // COMBAT & WEAPON CONTROLLER
+    // COMBAT & WEAPON CONTROLLER (CLEAN GRIP & SAFE AIMING)
     // =========================================================================================================
     public class AICombatController
     {
@@ -1107,7 +981,7 @@ namespace AdvancedSmartAIMod
         public void UpdateCombat(float deltaTime)
         {
             scanTimer += deltaTime;
-            if (scanTimer >= 0.22f / ai.Config.ReactionTimeMultiplier)
+            if (scanTimer >= 0.25f / ai.Config.ReactionTimeMultiplier)
             {
                 scanTimer = 0f;
                 ScanForTargets();
@@ -1121,7 +995,7 @@ namespace AdvancedSmartAIMod
 
         public void FixedUpdateCombat(float fixedDeltaTime)
         {
-            ApplyAimTorqueToArm(fixedDeltaTime);
+            MaintainWeaponOrientation();
         }
 
         private void ScanForTargets()
@@ -1156,18 +1030,18 @@ namespace AdvancedSmartAIMod
                 RaycastHit2D los = Physics2D.Linecast(myPos, limb.transform.position, LayerMask.GetMask("Default", "Objects"));
                 if (los.collider != null && los.collider.transform.root != targetPerson.transform.root && !ai.IsOwnLimb(los.collider)) continue;
 
-                float score = 120f - dist;
+                float score = 100f - dist;
 
                 PhysicalBehaviour pb = col.GetComponent<PhysicalBehaviour>();
                 if (pb != null && pb.beingHeldByGripper)
                 {
-                    score += 40f;
+                    score += 30f;
                 }
 
                 int enemyTier = CrossModAdapterEngine.DetectEntityTier(targetPerson.gameObject);
                 if (enemyTier > 0)
                 {
-                    score += enemyTier * 15f;
+                    score += enemyTier * 10f;
                 }
 
                 if (score > bestScore)
@@ -1182,7 +1056,7 @@ namespace AdvancedSmartAIMod
             {
                 CurrentTarget = bestTarget;
                 TargetTier = detectedEnemyTier;
-                reactionDelayTimer = 0.30f / ai.Config.ReactionTimeMultiplier;
+                reactionDelayTimer = 0.25f / ai.Config.ReactionTimeMultiplier;
                 if (CurrentTarget != null)
                 {
                     ai.NotifyTargetAcquired(CurrentTarget);
@@ -1221,7 +1095,7 @@ namespace AdvancedSmartAIMod
                 float dist = Vector2.Distance(myPos, pb.transform.position);
 
                 float score = 50f - dist;
-                if (type == WeaponType.AbilityWeapon) score += 30f;
+                if (type == WeaponType.AbilityWeapon) score += 25f;
                 else if (type == WeaponType.Firearm) score += 20f;
 
                 if (score > bestScore)
@@ -1236,13 +1110,13 @@ namespace AdvancedSmartAIMod
 
         private void UpdateWeaponPickupLogic()
         {
-            if (NearestWeapon == null || HeldWeapon != null || ai.FrontArmLimb == null) return;
+            if (NearestWeapon == null || HeldWeapon != null || ai.TorsoLimb == null) return;
 
-            Vector2 handPos = ai.FrontArmLimb.transform.position;
+            Vector2 bodyPos = ai.TorsoLimb.transform.position;
             Vector2 weaponPos = NearestWeapon.transform.position;
-            float distToWeapon = Vector2.Distance(handPos, weaponPos);
+            float distToWeapon = Vector2.Distance(bodyPos, weaponPos);
 
-            if (distToWeapon <= 1.4f)
+            if (distToWeapon <= 1.5f)
             {
                 EquipWeapon(NearestWeapon);
             }
@@ -1250,16 +1124,36 @@ namespace AdvancedSmartAIMod
 
         public void EquipWeapon(PhysicalBehaviour weapon)
         {
-            if (weapon == null || ai.FrontArmLimb == null || ai.FrontArmRigidbody == null) return;
+            if (weapon == null || ai.TorsoLimb == null || ai.TorsoRigidbody == null) return;
 
-            Transform handTransform = ai.FrontArmLimb.transform;
-            weapon.transform.position = handTransform.position;
+            // 1. Completely ignore collisions between the weapon and ALL limbs of this AI
+            IgnoreCollisionsWithAI(weapon, true);
 
+            // 2. Position and orient the weapon correctly in front of the AI
+            float facingDir = ai.Navigation.FacingDirection >= 0 ? 1f : -1f;
+            Vector2 torsoPos = ai.TorsoLimb.transform.position;
+
+            // Offset horizontally and at gun level
+            Vector2 holdOffset = new Vector2(facingDir * 0.45f, -0.05f);
+            weapon.transform.position = torsoPos + holdOffset;
+
+            // Set horizontal rotation (facing right 0 deg, facing left 180 deg)
+            weapon.transform.rotation = Quaternion.Euler(0f, 0f, facingDir < 0 ? 180f : 0f);
+
+            // 3. Connect via FixedJoint2D to the Torso safely
             if (weaponJoint != null) UnityEngine.Object.Destroy(weaponJoint);
-            weaponJoint = handTransform.gameObject.AddComponent<FixedJoint2D>();
-            weaponJoint.connectedBody = weapon.rigidbody;
+
+            Rigidbody2D weaponRb = weapon.rigidbody;
+            if (weaponRb != null)
+            {
+                weaponRb.velocity = Vector2.zero;
+                weaponRb.angularVelocity = 0f;
+            }
+
+            weaponJoint = ai.TorsoLimb.gameObject.AddComponent<FixedJoint2D>();
+            weaponJoint.connectedBody = weaponRb;
             weaponJoint.autoConfigureConnectedAnchor = false;
-            weaponJoint.anchor = Vector2.zero;
+            weaponJoint.anchor = new Vector2(facingDir * 0.45f, -0.05f);
             weaponJoint.connectedAnchor = Vector2.zero;
             weaponJoint.dampingRatio = 1f;
             weaponJoint.frequency = 0f;
@@ -1273,10 +1167,55 @@ namespace AdvancedSmartAIMod
             ai.NotifyWeaponEquipped(weapon);
         }
 
+        private void IgnoreCollisionsWithAI(PhysicalBehaviour weapon, bool ignore)
+        {
+            if (weapon == null || ai.Person == null || ai.Person.Limbs == null) return;
+
+            Collider2D[] weaponCols = weapon.GetComponentsInChildren<Collider2D>();
+            LimbBehaviour[] limbs = ai.Person.Limbs;
+
+            for (int w = 0; w < weaponCols.Length; w++)
+            {
+                Collider2D wCol = weaponCols[w];
+                if (wCol == null) continue;
+
+                for (int l = 0; l < limbs.Length; l++)
+                {
+                    LimbBehaviour limb = limbs[l];
+                    if (limb == null) continue;
+
+                    Collider2D lCol = limb.GetComponent<Collider2D>();
+                    if (lCol != null)
+                    {
+                        Physics2D.IgnoreCollision(wCol, lCol, ignore);
+                    }
+                }
+            }
+        }
+
+        private void MaintainWeaponOrientation()
+        {
+            if (HeldWeapon == null || weaponJoint == null) return;
+
+            // Calculate desired aim angle towards target if present, otherwise horizontal
+            float desiredAngle = (ai.Navigation.FacingDirection >= 0) ? 0f : 180f;
+
+            if (CurrentTarget != null && ai.TorsoLimb != null)
+            {
+                Vector2 diff = (Vector2)CurrentTarget.transform.position - (Vector2)ai.TorsoLimb.transform.position;
+                desiredAngle = Mathf.Atan2(diff.y, diff.x) * Mathf.Rad2Deg;
+                if (ai.Navigation.FacingDirection < 0 && desiredAngle < 0) desiredAngle += 360f;
+            }
+
+            // Smoothly update weapon rotation without applying destructive joint torques
+            HeldWeapon.transform.rotation = Quaternion.Euler(0f, 0f, desiredAngle);
+        }
+
         private void InspectHeldWeapon()
         {
             if (HeldWeapon != null && weaponJoint == null)
             {
+                IgnoreCollisionsWithAI(HeldWeapon, false);
                 HeldWeapon.beingHeldByGripper = false;
                 HeldWeapon = null;
                 CurrentWeaponType = WeaponType.None;
@@ -1390,7 +1329,7 @@ namespace AdvancedSmartAIMod
                 return;
             }
 
-            if (fireCooldownTimer <= 0f && IsAimAlignedWithTarget())
+            if (fireCooldownTimer <= 0f)
             {
                 FireEquippedGun();
             }
@@ -1400,11 +1339,7 @@ namespace AdvancedSmartAIMod
         {
             if (TargetDistance <= ai.Config.MeleeRange)
             {
-                if (ai.FrontArmRigidbody != null)
-                {
-                    float swingDir = Mathf.Sign(CurrentTarget.transform.position.x - ai.transform.position.x);
-                    ai.FrontArmRigidbody.AddTorque(swingDir * 8f, ForceMode2D.Impulse);
-                }
+                HeldWeapon.SendMessage("Use", SendMessageOptions.DontRequireReceiver);
             }
             else if (TargetDistance >= ai.Config.ThrowThresholdDistance && ai.Config.EnableWeaponThrowing)
             {
@@ -1419,7 +1354,7 @@ namespace AdvancedSmartAIMod
             HeldWeapon.SendMessage("Use", SendMessageOptions.DontRequireReceiver);
             HeldWeapon.SendMessage("UsePower", SendMessageOptions.DontRequireReceiver);
 
-            fireCooldownTimer = UnityEngine.Random.Range(0.12f, 0.32f) / ai.Config.ReactionTimeMultiplier;
+            fireCooldownTimer = UnityEngine.Random.Range(0.15f, 0.35f) / ai.Config.ReactionTimeMultiplier;
 
             if (IsWeaponOutOfAmmo(HeldWeapon))
             {
@@ -1442,6 +1377,7 @@ namespace AdvancedSmartAIMod
                 weaponJoint = null;
             }
 
+            IgnoreCollisionsWithAI(weaponToThrow, false);
             weaponToThrow.beingHeldByGripper = false;
             HeldWeapon = null;
             CurrentWeaponType = WeaponType.None;
@@ -1452,48 +1388,17 @@ namespace AdvancedSmartAIMod
                 Vector2 targetPos = CurrentTarget.transform.position;
                 Vector2 displacement = targetPos - origin;
 
-                float speed = 14f * ai.Config.ReactionTimeMultiplier;
-                float angle = Mathf.Clamp(displacement.y / Mathf.Max(1f, Mathf.Abs(displacement.x)), -0.4f, 0.7f);
+                float speed = 12f * ai.Config.ReactionTimeMultiplier;
+                float angle = Mathf.Clamp(displacement.y / Mathf.Max(1f, Mathf.Abs(displacement.x)), -0.3f, 0.5f);
 
-                Vector2 throwVelocity = new Vector2(Mathf.Sign(displacement.x) * speed, (angle * speed) + 3f);
+                Vector2 throwVelocity = new Vector2(Mathf.Sign(displacement.x) * speed, (angle * speed) + 2f);
 
                 weaponRb.velocity = throwVelocity;
-                weaponRb.AddTorque(UnityEngine.Random.Range(-150f, 150f));
+                weaponRb.AddTorque(UnityEngine.Random.Range(-100f, 100f));
             }
 
             ai.NotifyWeaponThrown(weaponToThrow, weaponRb != null ? weaponRb.velocity : Vector2.zero);
             scanTimer = 999f;
-        }
-
-        private bool IsAimAlignedWithTarget()
-        {
-            if (ai.FrontArmLimb == null || CurrentTarget == null) return false;
-
-            Vector2 toTarget = (Vector2)CurrentTarget.transform.position - (Vector2)ai.FrontArmLimb.transform.position;
-            float targetAngle = Mathf.Atan2(toTarget.y, toTarget.x) * Mathf.Rad2Deg;
-            float currentAngle = ai.FrontArmRigidbody != null ? ai.FrontArmRigidbody.rotation : ai.FrontArmLimb.transform.eulerAngles.z;
-
-            return Mathf.Abs(Mathf.DeltaAngle(currentAngle, targetAngle)) < 24f;
-        }
-
-        private void ApplyAimTorqueToArm(float fixedDeltaTime)
-        {
-            if (ai.FrontArmRigidbody == null || CurrentTarget == null || ai.FrontArmLimb == null) return;
-
-            Vector2 targetAimPoint = (Vector2)CurrentTarget.transform.position;
-            Vector2 armPos = ai.FrontArmLimb.transform.position;
-            Vector2 aimVector = targetAimPoint - armPos;
-
-            float desiredAngle = Mathf.Atan2(aimVector.y, aimVector.x) * Mathf.Rad2Deg;
-
-            float spreadVariance = (1f - Mathf.Clamp01(ai.Config.AccuracyMultiplier)) * 14f;
-            desiredAngle += Mathf.Sin(Time.time * 6f) * spreadVariance;
-
-            float currentAngle = ai.FrontArmRigidbody.rotation;
-            float angleDelta = Mathf.DeltaAngle(currentAngle, desiredAngle);
-
-            float aimTorque = (angleDelta * 6f) - (ai.FrontArmRigidbody.angularVelocity * 0.5f);
-            ai.FrontArmRigidbody.AddTorque(aimTorque, ForceMode2D.Force);
         }
     }
 
